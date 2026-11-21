@@ -6,10 +6,13 @@ import math
 import re
 import socket
 import ssl
+import zipfile
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Tuple
 from urllib.parse import quote_plus, urlparse
 
+import cv2
+from fpdf import FPDF
 import numpy as np
 from PIL import Image, ImageChops, ImageEnhance, ImageOps
 from PIL.ExifTags import GPSTAGS, TAGS
@@ -25,14 +28,14 @@ except ImportError:
   HAS_PYTESSERACT = False
 
 st.set_page_config(
-    page_title="OSINT Shield — Command Center",
+    page_title="OSINT Shield Ultimate",
     page_icon="🛡️",
     layout="wide",
 )
 
 
 # ==========================================
-# FUNGSI BANTU MODUL 1: IMAGE FORENSICS
+# FUNGSI BANTU UMUM & HASHING
 # ==========================================
 def compute_hashes(file_bytes: bytes) -> Dict[str, str]:
   return {
@@ -256,7 +259,91 @@ def build_csv_report(rows: List[Dict[str, str]]) -> str:
 
 
 # ==========================================
-# FUNGSI BANTU MODUL 2: ANTI-PHISHING & LINK
+# FUNGSI BANTU QR CODE DECODER
+# ==========================================
+def decode_qr_codes(pil_img: Image.Image) -> List[str]:
+  rgb = np.array(pil_img.convert("RGB"))
+  bgr = cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR)
+  detector = cv2.QRCodeDetector()
+  decoded_items: List[str] = []
+
+  try:
+    retval, decoded_info, _, _ = detector.detectAndDecodeMulti(bgr)
+    if retval and decoded_info:
+      for item in decoded_info:
+        if item and item.strip():
+          decoded_items.append(item.strip())
+  except Exception:
+    pass
+
+  if not decoded_items:
+    data, _, _ = detector.detectAndDecode(bgr)
+    if data and data.strip():
+      decoded_items.append(data.strip())
+
+  return list(dict.fromkeys(decoded_items))
+
+
+# ==========================================
+# FUNGSI BANTU APK & FILE INSPECTOR
+# ==========================================
+DANGEROUS_APK_PERMS = {
+    "READ_SMS": "Membaca SMS masuk (sangat berisiko untuk pencurian kode OTP perbankan!).",
+    "RECEIVE_SMS": "Mencegat SMS masuk secara diam-diam.",
+    "SEND_SMS": "Mengirim SMS berbayar atau menyebarkan link penipuan ke kontak.",
+    "READ_CONTACTS": "Mencuri seluruh daftar nomor telepon keluarga/kerabat di HP.",
+    "BIND_ACCESSIBILITY_SERVICE": "Mengambil alih kontrol layar & membaca ketikan PIN/password.",
+    "SYSTEM_ALERT_WINDOW": "Menampilkan layar palsu (overlay) di atas aplikasi mobile banking.",
+    "REQUEST_INSTALL_PACKAGES": "Menginstal aplikasi berbahaya tambahan tanpa sepengetahuan korban.",
+    "READ_CALL_LOG": "Membaca riwayat panggilan telepon.",
+    "RECORD_AUDIO": "Merekam suara melalui mikrofon HP.",
+    "ACCESS_FINE_LOCATION": "Melacak lokasi GPS secara presisi.",
+}
+
+
+def inspect_suspicious_file(file_name: str, file_bytes: bytes) -> Dict[str, Any]:
+  hashes = compute_hashes(file_bytes)
+  info: Dict[str, Any] = {
+      "file_name": file_name,
+      "size_kb": round(len(file_bytes) / 1024, 2),
+      "hashes": hashes,
+      "is_zip_or_apk": zipfile.is_zipfile(io.BytesIO(file_bytes)),
+      "archive_entries": [],
+      "detected_permissions": [],
+      "embedded_urls": [],
+  }
+
+  # Cari URL tertanam di byte file
+  text_blob = file_bytes.decode("latin-1", errors="ignore")
+  urls = re.findall(r"https?://[^\s\"'<>\\\x00-\x1f]{6,120}", text_blob)
+  info["embedded_urls"] = list(dict.fromkeys(urls))[:30]
+
+  if info["is_zip_or_apk"]:
+    try:
+      with zipfile.ZipFile(io.BytesIO(file_bytes), "r") as zf:
+        entries = zf.namelist()
+        info["archive_entries"] = entries[:40]
+        if "AndroidManifest.xml" in entries:
+          manifest_bytes = zf.read("AndroidManifest.xml")
+          # AndroidManifest.xml di dalam APK terkompresi dalam binary XML (UTF-16LE / ASCII)
+          m_ascii = manifest_bytes.decode("latin-1", errors="ignore")
+          m_utf16 = manifest_bytes.decode("utf-16le", errors="ignore")
+          combined_manifest = m_ascii + "\n" + m_utf16
+
+          for perm_key, desc in DANGEROUS_APK_PERMS.items():
+            if perm_key in combined_manifest:
+              info["detected_permissions"].append({
+                  "permission": f"android.permission.{perm_key}",
+                  "risk_description": desc,
+              })
+    except Exception as exc:
+      info["zip_error"] = str(exc)
+
+  return info
+
+
+# ==========================================
+# FUNGSI BANTU LINK & PHISHING INSPECTOR
 # ==========================================
 def inspect_url_safety(raw_url: str) -> Dict[str, Any]:
   url = raw_url.strip()
@@ -276,7 +363,6 @@ def inspect_url_safety(raw_url: str) -> Dict[str, Any]:
       "risk_flags": [],
   }
 
-  # 1. Cek pola mencurigakan pada URL
   suspicious_tlds = (".xyz", ".top", ".buzz", ".click", ".apk", ".vip", ".icu", ".loan")
   if any(domain.endswith(tld) for tld in suspicious_tlds):
     result["risk_flags"].append(f"Domain menggunakan ekstensi TLD berisiko tinggi ({domain}).")
@@ -287,13 +373,12 @@ def inspect_url_safety(raw_url: str) -> Dict[str, Any]:
   if re.match(r"^\d{1,3}(\.\d{1,3}){3}$", domain):
     result["risk_flags"].append("Tautan mengarah langsung ke alamat IP mentah, bukan nama domain resmi.")
 
-  # 2. Lacak redirect tanpa mengeksekusi konten halaman
   try:
     resp = requests.head(
         url,
         allow_redirects=True,
         timeout=8,
-        headers={"User-Agent": "OSINT-Shield-Inspector/1.0"},
+        headers={"User-Agent": "OSINT-Shield-Inspector/2.0"},
     )
     chain = [h.url for h in resp.history] + [resp.url]
     result["redirect_chain"] = chain
@@ -308,7 +393,6 @@ def inspect_url_safety(raw_url: str) -> Dict[str, Any]:
   except Exception as exc:
     result["redirect_error"] = str(exc)
 
-  # 3. Resolusi IP & Google Public DNS
   if domain:
     try:
       ips = list({info[4][0] for info in socket.getaddrinfo(domain, None)})
@@ -328,7 +412,6 @@ def inspect_url_safety(raw_url: str) -> Dict[str, Any]:
       except Exception:
         pass
 
-    # 4. Cek Sertifikat SSL
     try:
       ctx = ssl.create_default_context()
       with socket.create_connection((domain, 443), timeout=5) as sock:
@@ -348,7 +431,84 @@ def inspect_url_safety(raw_url: str) -> Dict[str, Any]:
 
 
 # ==========================================
-# FUNGSI BANTU MODUL 3: USERNAME RECON
+# FUNGSI BANTU EMAIL HEADER ANALYZER
+# ==========================================
+def analyze_email_header(raw_header: str) -> Dict[str, Any]:
+  lines = raw_header.splitlines()
+  headers_map: Dict[str, List[str]] = {}
+  current_key = ""
+  for line in lines:
+    if line.startswith((" ", "\t")) and current_key:
+      headers_map[current_key][-1] += " " + line.strip()
+    elif ":" in line:
+      k, v = line.split(":", 1)
+      current_key = k.strip().lower()
+      headers_map.setdefault(current_key, []).append(v.strip())
+
+  from_val = headers_map.get("from", ["-"])[0]
+  reply_to_val = headers_map.get("reply-to", ["-"])[0]
+  return_path = headers_map.get("return-path", ["-"])[0]
+  subject_val = headers_map.get("subject", ["-"])[0]
+  auth_results = " | ".join(headers_map.get("authentication-results", []))
+
+  warnings = []
+  from_domain_match = re.search(r"@([a-zA-Z0-9.-]+)", from_val)
+  reply_domain_match = re.search(r"@([a-zA-Z0-9.-]+)", reply_to_val)
+  if from_domain_match and reply_domain_match:
+    if from_domain_match.group(1).lower() != reply_domain_match.group(1).lower():
+      warnings.append(
+          f"Alamat 'From' ({from_domain_match.group(1)}) berbeda dengan 'Reply-To' ({reply_domain_match.group(1)}) — indikasi kuat email spoofing/penipuan!"
+      )
+
+  auth_lower = auth_results.lower()
+  spf_status = "PASS" if "spf=pass" in auth_lower else ("FAIL" if "spf=fail" in auth_lower else "Tidak Terdeteksi")
+  dkim_status = "PASS" if "dkim=pass" in auth_lower else ("FAIL" if "dkim=fail" in auth_lower else "Tidak Terdeteksi")
+  dmarc_status = "PASS" if "dmarc=pass" in auth_lower else ("FAIL" if "dmarc=fail" in auth_lower else "Tidak Terdeteksi")
+
+  if "FAIL" in (spf_status, dkim_status, dmarc_status):
+    warnings.append("Salah satu verifikasi keamanan email (SPF/DKIM/DMARC) GAGAL. Email ini kemungkinan besar dipalsukan.")
+
+  received_hops = headers_map.get("received", [])
+  ips_found = list(
+      dict.fromkeys(re.findall(r"\b(?:\d{1,3}\.){3}\d{1,3}\b", "\n".join(received_hops)))
+  )
+
+  return {
+      "subject": subject_val,
+      "from": from_val,
+      "reply_to": reply_to_val,
+      "return_path": return_path,
+      "spf": spf_status,
+      "dkim": dkim_status,
+      "dmarc": dmarc_status,
+      "warnings": warnings,
+      "server_ips": ips_found,
+      "received_hops": received_hops,
+  }
+
+
+# ==========================================
+# FUNGSI BANTU PASSWORD LEAK (K-ANONYMITY)
+# ==========================================
+def check_password_pwned(password: str) -> int:
+  sha1_hash = hashlib.sha1(password.encode("utf-8")).hexdigest().upper()
+  prefix, suffix = sha1_hash[:5], sha1_hash[5:]
+  resp = requests.get(
+      f"https://api.pwnedpasswords.com/range/{prefix}",
+      timeout=8,
+      headers={"User-Agent": "OSINT-Shield-Checker"},
+  )
+  resp.raise_for_status()
+  for line in resp.text.splitlines():
+    if ":" in line:
+      h_suffix, count = line.split(":", 1)
+      if h_suffix.strip() == suffix:
+        return int(count.strip())
+  return 0
+
+
+# ==========================================
+# FUNGSI BANTU USERNAME RECON
 # ==========================================
 PLATFORMS = {
     "GitHub": "https://github.com/{}",
@@ -379,7 +539,6 @@ def check_username_public(username: str) -> List[Dict[str, str]]:
     try:
       r = requests.get(target_url, headers=headers, timeout=5, allow_redirects=True)
       if r.status_code == 200:
-        # Beberapa platform tetap return 200 untuk halaman tidak ditemukan
         lower_text = r.text.lower()
         if "page not found" in lower_text or "user not found" in lower_text:
           status_label = "Tidak Ditemukan (404)"
@@ -401,34 +560,86 @@ def check_username_public(username: str) -> List[Dict[str, str]]:
 
 
 # ==========================================
+# FUNGSI BANTU GENERATOR LAPORAN PDF
+# ==========================================
+def generate_case_pdf(
+    case_title: str,
+    investigator: str,
+    victim_or_target: str,
+    incident_date: str,
+    chronology: str,
+    digital_evidence: str,
+) -> bytes:
+  pdf = FPDF()
+  pdf.add_page()
+  pdf.set_auto_page_break(auto=True, margin=15)
+
+  pdf.set_font("Helvetica", "B", 16)
+  pdf.cell(0, 10, "LAPORAN DOKUMENTASI BUKTI DIGITAL (OSINT)", ln=True, align="C")
+  pdf.set_font("Helvetica", "", 10)
+  pdf.cell(
+      0,
+      6,
+      f"Dibuat via OSINT Shield pada {datetime.now().strftime('%Y-%m-%d %H:%M')}",
+      ln=True,
+      align="C",
+  )
+  pdf.ln(8)
+
+  def add_field(label: str, value: str) -> None:
+    pdf.set_font("Helvetica", "B", 11)
+    pdf.cell(0, 7, label, ln=True)
+    pdf.set_font("Helvetica", "", 10)
+    safe_val = value.encode("latin-1", errors="replace").decode("latin-1")
+    pdf.multi_cell(0, 6, safe_val if safe_val.strip() else "-")
+    pdf.ln(3)
+
+  add_field("Judul Kasus / Laporan:", case_title)
+  add_field("Pelapor / Peneliti:", investigator)
+  add_field("Entitas Terlapor (Nomor / Akun / Rekening / Link):", victim_or_target)
+  add_field("Waktu Kejadian:", incident_date)
+  add_field("Kronologi Singkat:", chronology)
+  add_field("Rincian Bukti Digital (Hash SHA-256 / IP / Metadata / URL):", digital_evidence)
+
+  return bytes(pdf.output())
+
+
+# ==========================================
 # ANTARMUKA UTAMA APLIKASI
 # ==========================================
 def main() -> None:
-  st.sidebar.title("🛡️ OSINT Shield")
-  st.sidebar.caption("Alat Verifikasi Fakta & Perlindungan Digital")
+  st.sidebar.title("🛡️ OSINT Shield Ultimate")
+  st.sidebar.caption("9-in-1 Perlindungan Digital & Investigasi")
+
   module_choice = st.sidebar.radio(
       "Pilih Modul Investigasi:",
       [
           "1. Forensik Gambar & Metadata",
-          "2. Cek Link Phishing & Domain",
-          "3. Pelacak Username Publik",
-          "4. Pencarian Cerdas (Dorking & Kontak)",
+          "2. Bongkar QR Code / QRIS Palsu",
+          "3. Cek File .APK / Dokumen Berbahaya",
+          "4. Cek Link Phishing & Domain",
+          "5. Analisis Header Email Phishing",
+          "6. Cek Kebocoran Password & Email",
+          "7. Pelacak Username Publik",
+          "8. Cek Rekening, E-Wallet & Dorking",
+          "9. Buat Laporan Bukti PDF",
       ],
   )
+
   st.sidebar.divider()
   st.sidebar.info(
-      "Gunakan alat ini untuk melindungi kerabat dari penipuan online, hoaks,"
-      " dan pencurian data menggunakan sumber informasi terbuka yang legal."
+      "Gunakan seluruh modul ini secara etis untuk membantu memverifikasi"
+      " fakta dan melindungi keluarga/kerabat dari penipuan digital."
   )
 
   # ==========================================
-  # MODUL 1: IMAGE FORENSICS
+  # MODUL 1: FORENSIK GAMBAR & METADATA
   # ==========================================
   if module_choice == "1. Forensik Gambar & Metadata":
     st.title("🕵️ Forensik Gambar & Deep Metadata")
     st.caption(
-        "Periksa keaslian foto, bukti transfer, koordinat GPS, jejak editan"
-        " (ELA), arah bayangan, hingga hapus metadata sebelum berbagi foto."
+        "Analisis metadata EXIF, bukti transfer editan (ELA), koordinat GPS,"
+        " arah bayangan matahari, OCR, dan hapus metadata foto."
     )
 
     uploaded_file = st.file_uploader(
@@ -450,7 +661,6 @@ def main() -> None:
         oriented_img = ImageOps.exif_transpose(img).copy()
         raw_img = img.copy()
         img_format = img.format or "Tidak diketahui"
-        img_mode = img.mode
         width, height = img.size
         general_exif, gps_raw = extract_exif_data(img)
         deep_meta = extract_deep_metadata(img, file_bytes)
@@ -526,7 +736,7 @@ def main() -> None:
       if filtered:
         st.dataframe(filtered, use_container_width=True, hide_index=True)
       else:
-        st.info("Tidak ada metadata EXIF standar yang ditemukan (umum jika foto dikirim lewat WhatsApp/medsos).")
+        st.info("Tidak ada metadata EXIF standar yang ditemukan pada gambar ini.")
 
     with t2:
       st.subheader("Jejak Software & Strings Tersembunyi")
@@ -544,8 +754,8 @@ def main() -> None:
         st.info("Tidak ada string tersembunyi yang cocok.")
 
     with t3:
-      st.subheader("Error Level Analysis (Deteksi Manipulasi / Editan)")
-      st.caption("Berguna untuk mengecek bukti transfer atau dokumen foto. Bagian yang memiliki tingkat kecerahan kontras mencolok dibanding area sekitarnya patut dicurigai telah ditempel/diedit.")
+      st.subheader("Error Level Analysis (Deteksi Editan)")
+      st.caption("Area dengan kecerahan kontras mencolok dibanding sekitarnya patut dicurigai sebagai hasil tempelan/editan (misalnya angka pada bukti transfer palsu).")
       ec1, ec2 = st.columns(2)
       with ec1:
         q_ela = st.slider("Kualitas Rekompresi", 50, 98, 90)
@@ -591,7 +801,7 @@ def main() -> None:
       m3.metric("Arah Bayangan Benda", f"{solar['shadow_direction_deg']}°")
 
       st.divider()
-      st.subheader("Reverse Image Search (Cek Foto Curian / Hoaks)")
+      st.subheader("Reverse Image Search")
       st.markdown(
           "* [Cari di Google Lens](https://lens.google.com/)\n"
           "* [Cari di Yandex Images](https://yandex.com/images/)\n"
@@ -600,7 +810,6 @@ def main() -> None:
 
     with t5:
       st.subheader("Pembersih Metadata (Lindungi Privasi Keluarga)")
-      st.caption("Hapus lokasi GPS dan tipe HP dari foto sebelum diunggah ke media sosial atau grup publik.")
       clean_bytes = strip_metadata_to_jpeg(raw_img, quality=92)
       st.download_button(
           "🧹 Unduh Foto Bersih Tanpa Metadata (JPEG)",
@@ -617,32 +826,114 @@ def main() -> None:
         except Exception as e:
           st.warning(f"OCR tidak tersedia di server ini: {e}")
       else:
-        st.info("Fitur OCR memerlukan pustaka `pytesseract` & engine `tesseract-ocr` di server.")
+        st.info("OCR memerlukan pustaka `pytesseract` & engine `tesseract-ocr` di server.")
 
   # ==========================================
-  # MODUL 2: ANTI-PHISHING & LINK INSPECTOR
+  # MODUL 2: DETEKTOR QR CODE / QRIS PALSU
   # ==========================================
-  elif module_choice == "2. Cek Link Phishing & Domain":
-    st.title("🔗 Pemeriksa Keamanan Link & Domain (Anti-Scam)")
+  elif module_choice == "2. Bongkar QR Code / QRIS Palsu":
+    st.title("📷 Bongkar Isi QR Code / QRIS Sebelum Dipindai")
     st.caption(
-        "Periksa tautan mencurigakan (undangan palsu, promo bank, shortlink)"
-        " tanpa harus membukanya di browser HP kerabat."
+        "Unggah gambar tangkapan layar (screenshot) atau foto QR Code untuk"
+        " melihat tautan atau data asli di dalamnya tanpa membukanya lewat"
+        " kamera HP."
+    )
+
+    qr_file = st.file_uploader("Unggah gambar berisi QR Code", type=["jpg", "jpeg", "png", "webp"])
+    if qr_file:
+      pil_qr = Image.open(qr_file)
+      c1, c2 = st.columns([1, 1.4])
+      with c1:
+        st.image(pil_qr, caption="Gambar QR", use_container_width=True)
+      with c2:
+        decoded_list = decode_qr_codes(pil_qr)
+        if decoded_list:
+          st.success(f"Ditemukan {len(decoded_list)} data QR Code:")
+          for idx, item in enumerate(decoded_list, 1):
+            st.markdown(f"**Isi QR #{idx}:**")
+            st.code(item, language="text")
+            if item.startswith(("http://", "https://")):
+              st.warning(
+                  "QR ini mengarah ke tautan web! Pastikan domainnya resmi"
+                  " sebelum dikunjungi."
+              )
+            elif "ID.CO.QRIS" in item.upper() or "000201" in item:
+              st.info(
+                  "Terdeteksi format standar **QRIS Pembayaran**. Periksa"
+                  " nama merchant yang muncul di teks mentah di atas."
+              )
+        else:
+          st.warning("Tidak ada QR Code yang terbaca. Pastikan gambar QR cukup jelas dan tidak terpotong.")
+
+  # ==========================================
+  # MODUL 3: CEK FILE .APK / DOKUMEN MENCURIGAKAN
+  # ==========================================
+  elif module_choice == "3. Cek File .APK / Dokumen Berbahaya":
+    st.title("📦 Pemeriksa File .APK & Dokumen Mencurigakan")
+    st.caption(
+        "Periksa file kiriman WhatsApp (seperti 'Undangan_Nikah.apk', 'Resi"
+        " Paket.apk', atau dokumen) secara aman tanpa menginstalnya."
+    )
+
+    susp_file = st.file_uploader("Unggah file yang dicurigai (APK, ZIP, PDF, dll.)")
+    if susp_file:
+      f_bytes = susp_file.getvalue()
+      report = inspect_suspicious_file(susp_file.name, f_bytes)
+
+      if susp_file.name.lower().endswith(".apk") or report["detected_permissions"]:
+        st.error(
+            "🚨 **PERINGATAN KERAS:** File ini adalah paket aplikasi Android"
+            " (.APK)! Undangan pernikahan, resi kurir, atau surat tilang"
+            " asli TIDAK PERNAH berbentuk file `.apk`."
+        )
+
+      st.subheader("Sidik Jari Digital (Hash File)")
+      st.write(f"**Nama File:** `{report['file_name']}` ({report['size_kb']} KB)")
+      st.write(f"**SHA-256:** `{report['hashes']['sha256']}`")
+      st.write(f"**MD5:** `{report['hashes']['md5']}`")
+      st.markdown(
+          f"🔍 **[Cek Hash File Ini di VirusTotal](https://www.virustotal.com/gui/file/{report['hashes']['sha256']})**"
+      )
+
+      if report["detected_permissions"]:
+        st.divider()
+        st.subheader("⚠️ Izin Berbahaya Terdeteksi di Dalam APK:")
+        for p in report["detected_permissions"]:
+          st.error(f"**{p['permission']}** — {p['risk_description']}")
+
+      if report["embedded_urls"]:
+        st.divider()
+        st.subheader("🌐 Tautan / Server Tujuan yang Tertanam di Dalam File:")
+        st.code("\n".join(report["embedded_urls"]), language="text")
+
+      if report["archive_entries"]:
+        with st.expander("Lihat Struktur Isi Paket File"):
+          st.code("\n".join(report["archive_entries"]), language="text")
+
+  # ==========================================
+  # MODUL 4: CEK LINK PHISHING & DOMAIN
+  # ==========================================
+  elif module_choice == "4. Cek Link Phishing & Domain":
+    st.title("🔗 Pemeriksa Keamanan Link & Domain")
+    st.caption(
+        "Lacak ke mana shortlink diarahkan, periksa sertifikat SSL, dan"
+        " deteksi situs tiruan tanpa harus membukanya langsung."
     )
 
     url_input = st.text_input(
         "Tempelkan link yang ingin diperiksa:",
-        placeholder="Contoh: https://bit.ly/xxx atau https://cek-paket-kurir.xyz",
+        placeholder="Contoh: https://bit.ly/xxx atau https://promo-bank.xyz",
     )
     if st.button("🔍 Periksa Keamanan Link", type="primary") and url_input.strip():
       with st.spinner("Menganalisis tujuan redirect, DNS, dan sertifikat SSL..."):
         res = inspect_url_safety(url_input)
 
       if res["risk_flags"]:
-        st.error("⚠️ **Peringatan! Ditemukan Indikasi Risiko:**")
+        st.error("⚠️ **Ditemukan Indikasi Risiko:**")
         for flag in res["risk_flags"]:
           st.write(f"- {flag}")
       else:
-        st.success("✅ Tidak ditemukan pola mencurigakan dasar pada struktur tautan & SSL (tetap waspada terhadap isi halaman).")
+        st.success("✅ Struktur domain dan SSL terlihat normal (tetap waspada terhadap halaman login/form input data).")
 
       c1, c2 = st.columns(2)
       with c1:
@@ -666,72 +957,175 @@ def main() -> None:
       encoded_u = quote_plus(res["final_url"])
       st.markdown(
           f"**Cek Reputasi Eksternal:** "
-          f"[Cek di VirusTotal](https://www.virustotal.com/gui/search/{encoded_u}) | "
-          f"[Cek di urlscan.io](https://urlscan.io/search/#{quote_plus(res['domain'])})"
+          f"[VirusTotal](https://www.virustotal.com/gui/search/{encoded_u}) | "
+          f"[urlscan.io](https://urlscan.io/search/#{quote_plus(res['domain'])})"
       )
 
   # ==========================================
-  # MODUL 3: PELACAK USERNAME PUBLIK
+  # MODUL 5: ANALISIS HEADER EMAIL PHISHING
   # ==========================================
-  elif module_choice == "3. Pelacak Username Publik":
-    st.title("👤 Pelacak Jejak Username Publik")
+  elif module_choice == "5. Analisis Header Email Phishing":
+    st.title("📧 Analisis Header Email (Deteksi Email Palsu)")
     st.caption(
-        "Cek apakah sebuah username digunakan di berbagai platform sosial media"
-        " untuk memverifikasi keaslian akun atau melacak akun penipu."
+        "Tempelkan 'Show Original' / 'View Message Source' dari email"
+        " mencurigakan untuk mengecek keaslian pengirim (SPF, DKIM, DMARC)."
     )
 
-    uname_input = st.text_input(
-        "Masukkan Username (tanpa @):",
-        placeholder="Contoh: budi_santoso99",
+    raw_hdr = st.text_area(
+        "Tempelkan Raw Email Header di sini:",
+        height=220,
+        placeholder="Received: from ...\nAuthentication-Results: ...\nFrom: ...\nReply-To: ...",
     )
+    if st.button("🔎 Analisis Header Email", type="primary") and raw_hdr.strip():
+      h_res = analyze_email_header(raw_hdr)
+
+      if h_res["warnings"]:
+        for w in h_res["warnings"]:
+          st.error(f"🚨 {w}")
+      else:
+        st.success("✅ Tidak ditemukan ketidaksesuaian mencolok antara pengirim dan autentikasi dasar.")
+
+      m1, m2, m3 = st.columns(3)
+      m1.metric("Status SPF", h_res["spf"])
+      m2.metric("Status DKIM", h_res["dkim"])
+      m3.metric("Status DMARC", h_res["dmarc"])
+
+      st.write(f"**Subjek:** {h_res['subject']}")
+      st.write(f"**From:** `{h_res['from']}`")
+      st.write(f"**Reply-To:** `{h_res['reply_to']}`")
+      st.write(f"**Return-Path:** `{h_res['return_path']}`")
+      if h_res["server_ips"]:
+        st.write(f"**IP Server Pengirim Terdeteksi:** `{', '.join(h_res['server_ips'])}`")
+
+  # ==========================================
+  # MODUL 6: CEK KEBOCORAN PASSWORD & EMAIL
+  # ==========================================
+  elif module_choice == "6. Cek Kebocoran Password & Email":
+    st.title("🔐 Pemeriksa Keamanan Password & Kebocoran Data")
+    st.caption(
+        "Cek apakah kata sandi kerabat pernah bocor dalam insiden peretasan"
+        " global. Aman: password tidak pernah dikirim keluar dari aplikasi."
+    )
+
+    pw_input = st.text_input(
+        "Masukkan password yang ingin dicek keamanannya:",
+        type="password",
+    )
+    if st.button("🛡️ Cek Kebocoran Password", type="primary") and pw_input:
+      try:
+        leak_count = check_password_pwned(pw_input)
+        if leak_count > 0:
+          st.error(
+              f"⚠️ **BAHAYA!** Password ini ditemukan sebanyak **{leak_count:,}**"
+              " kali dalam database kebocoran data publik! Segera ganti"
+              " password ini di semua akun."
+          )
+        else:
+          st.success(
+              "✅ Password ini belum pernah ditemukan dalam database"
+              " kebocoran data publik Have I Been Pwned."
+          )
+      except Exception as exc:
+        st.warning(f"Gagal menghubungi layanan pengecekan: {exc}")
+
+    st.divider()
+    st.subheader("Cek Kebocoran Email")
+    email_check = st.text_input("Masukkan alamat email kerabat:", placeholder="nama@gmail.com").strip()
+    if email_check:
+      st.markdown(
+          f"Klik untuk mengecek riwayat kebocoran email `{email_check}` secara langsung:\n"
+          f"* [Cek di Have I Been Pwned](https://haveibeenpwned.com/account/{quote_plus(email_check)})\n"
+          f"* [Cek Kemunculan Publik di Google](https://www.google.com/search?q=%22{quote_plus(email_check)}%22)"
+      )
+
+  # ==========================================
+  # MODUL 7: PELACAK USERNAME PUBLIK
+  # ==========================================
+  elif module_choice == "7. Pelacak Username Publik":
+    st.title("👤 Pelacak Jejak Username Publik")
+    st.caption("Cek penggunaan username di berbagai platform sosial media.")
+
+    uname_input = st.text_input("Masukkan Username (tanpa @):", placeholder="Contoh: budi_santoso99")
     if st.button("🔎 Lacak Username", type="primary") and uname_input.strip():
-      with st.spinner("Mengecek ketersediaan profil publik di berbagai platform..."):
+      with st.spinner("Mengecek profil publik..."):
         rows = check_username_public(uname_input)
       st.dataframe(
           rows,
           use_container_width=True,
           hide_index=True,
-          column_config={
-              "Tautan Profil": st.column_config.LinkColumn("Tautan Profil")
-          },
+          column_config={"Tautan Profil": st.column_config.LinkColumn("Tautan Profil")},
       )
 
   # ==========================================
-  # MODUL 4: SMART GOOGLE DORKING & KONTAK
+  # MODUL 8: CEK REKENING, E-WALLET & DORKING
   # ==========================================
-  elif module_choice == "4. Pencarian Cerdas (Dorking & Kontak)":
-    st.title("🎯 Pencarian Investigasi Cerdas (OSINT Dorking)")
+  elif module_choice == "8. Cek Rekening, E-Wallet & Dorking":
+    st.title("💳 Cek Reputasi Rekening, E-Wallet & Pencarian Publik")
     st.caption(
-        "Buat kueri pencarian presisi untuk mengecek riwayat nomor telepon,"
-        " email, rekening, atau nama pelaku penipuan di catatan publik."
+        "Verifikasi nomor rekening bank, e-wallet, nomor telepon, atau nama"
+        " penjual sebelum kerabat melakukan transfer uang."
     )
 
     target_query = st.text_input(
-        "Masukkan Nomor HP / Email / Nama / Kata Kunci:",
-        placeholder="Contoh: 081234567890 atau nama toko online mencurigakan",
+        "Masukkan Nomor Rekening / No. HP / E-Wallet / Nama Toko:",
+        placeholder="Contoh: 081234567890 atau 1234567890",
     ).strip()
 
     if target_query:
       q_enc = quote_plus(f'"{target_query}"')
       scam_enc = quote_plus(
-          f'"{target_query}" (penipu OR penipuan OR scam OR hati-hati OR waspada)'
+          f'"{target_query}" (penipu OR penipuan OR scam OR hati-hati OR waspada OR blokir)'
       )
       socmed_enc = quote_plus(
           f'"{target_query}" (site:instagram.com OR site:facebook.com OR site:tiktok.com OR site:x.com)'
       )
-      doc_enc = quote_plus(
-          f'"{target_query}" (filetype:pdf OR filetype:xls OR filetype:xlsx OR filetype:doc)'
+
+      st.subheader("1. Portal Resmi & Crowdsourced Cek Rekening Indonesia")
+      st.markdown(
+          "* [Buka CekRekening.id (Komdigi RI)](https://cekrekening.id/home)\n"
+          "* [Buka Kredibel.com (Cek Reputasi Rekening & Telepon)](https://www.kredibel.com/)"
       )
 
-      st.subheader("Klik Tautan Riset Otomatis:")
+      st.subheader("2. Pencarian Laporan Keluhan & Jejak Digital")
       st.markdown(
-          f"1. **Cek Laporan Penipuan / Keluhan Publik:** [Cari di Google](https://www.google.com/search?q={scam_enc})\n"
-          f"2. **Pencarian Eksak di Seluruh Web:** [Cari di Google](https://www.google.com/search?q={q_enc})\n"
-          f"3. **Jejak di Media Sosial Utama:** [Cari di Google](https://www.google.com/search?q={socmed_enc})\n"
-          f"4. **Kemunculan di Dokumen Publik (PDF/Excel):** [Cari di Google](https://www.google.com/search?q={doc_enc})"
+          f"* [Cek Laporan Penipuan di Google](https://www.google.com/search?q={scam_enc})\n"
+          f"* [Pencarian Eksak di Seluruh Web](https://www.google.com/search?q={q_enc})\n"
+          f"* [Jejak di Media Sosial](https://www.google.com/search?q={socmed_enc})"
       )
     else:
-      st.info("Ketik nomor telepon, email, atau nama di atas untuk membuat tautan investigasi otomatis.")
+      st.info("Masukkan nomor rekening, nomor HP, atau nama penjual di atas.")
+
+  # ==========================================
+  # MODUL 9: BUAT LAPORAN BUKTI DIGITAL (PDF)
+  # ==========================================
+  elif module_choice == "9. Buat Laporan Bukti PDF":
+    st.title("📄 Generator Laporan Bukti Digital (PDF)")
+    st.caption(
+        "Susun temuan investigasi (hash bukti gambar, tautan phishing, nomor"
+        " rekening terlapor, dan kronologi) menjadi berkas PDF siap cetak."
+    )
+
+    with st.form("pdf_report_form"):
+      c_title = st.text_input("Judul Laporan", value="Dokumentasi Dugaan Penipuan Online")
+      c_inv = st.text_input("Nama Pelapor / Peneliti")
+      c_target = st.text_input("Identitas Terlapor (No. Rekening / No. HP / Username / Link)")
+      c_date = st.text_input("Tanggal & Waktu Kejadian", value=datetime.now().strftime("%d %B %Y, %H:%M WIB"))
+      c_chron = st.text_area("Kronologi Kejadian", height=120)
+      c_evid = st.text_area(
+          "Rincian Bukti Digital (Tempelkan Hash SHA-256, IP Server, URL Akhir, dll.)",
+          height=140,
+      )
+      submitted = st.form_submit_button("📥 Buat & Siapkan File PDF", type="primary")
+
+    if submitted:
+      pdf_bytes = generate_case_pdf(c_title, c_inv, c_target, c_date, c_chron, c_evid)
+      st.success("Berkas laporan PDF berhasil dibuat!")
+      st.download_button(
+          "⬇️ Unduh Laporan Bukti (.PDF)",
+          data=pdf_bytes,
+          file_name="Laporan_Bukti_OSINT.pdf",
+          mime="application/pdf",
+      )
 
 
 if __name__ == "__main__":
