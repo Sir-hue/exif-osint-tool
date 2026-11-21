@@ -36,59 +36,193 @@ st.set_page_config(
 )
 
 # ==========================================
-# CUSTOM CSS UNTUK TAMPILAN MODERN & BERSIH
+# CUSTOM CSS: TEMA CYBER-SLATE & SIDEBAR MODERN
 # ==========================================
 st.markdown(
     """
     <style>
-    .block-container {
-        padding-top: 1.8rem;
-        padding-bottom: 2.5rem;
-        max-width: 1200px;
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+
+    html, body, [class*="css"] {
+        font-family: 'Inter', sans-serif;
     }
-    .hero-banner {
-        background: linear-gradient(135deg, #0f172a 0%, #1e293b 60%, #0f2942 100%);
-        border: 1px solid rgba(56, 189, 248, 0.25);
-        border-radius: 14px;
-        padding: 1.4rem 1.8rem;
-        margin-bottom: 1.4rem;
+    code, pre {
+        font-family: 'JetBrains Mono', monospace !important;
+    }
+
+    /* Latar belakang utama */
+    .stApp {
+        background-color: #090d16;
+        color: #e2e8f0;
+    }
+
+    .block-container {
+        padding-top: 1.5rem;
+        padding-bottom: 3rem;
+        max-width: 1240px;
+    }
+
+    /* Styling Sidebar */
+    section[data-testid="stSidebar"] {
+        background-color: #0d1320;
+        border-right: 1px solid rgba(16, 185, 129, 0.18);
+    }
+    section[data-testid="stSidebar"] .block-container {
+        padding-top: 1.2rem;
+    }
+
+    .sidebar-brand {
+        background: linear-gradient(135deg, rgba(16, 185, 129, 0.14), rgba(6, 182, 212, 0.08));
+        border: 1px solid rgba(16, 185, 129, 0.3);
+        border-radius: 12px;
+        padding: 0.95rem 1rem;
+        margin-bottom: 1rem;
+    }
+    .sidebar-brand-title {
+        font-size: 1.2rem;
+        font-weight: 700;
         color: #f8fafc;
+        margin: 0;
+        letter-spacing: -0.01em;
+    }
+    .sidebar-brand-sub {
+        font-size: 0.78rem;
+        color: #6ee7b7;
+        margin: 0.15rem 0 0 0;
+    }
+
+    .nav-section-label {
+        font-size: 0.72rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        color: #64748b;
+        margin: 0.9rem 0 0.35rem 0.2rem;
+    }
+
+    /* Styling tombol navigasi sidebar */
+    section[data-testid="stSidebar"] button[kind="secondary"] {
+        background-color: transparent;
+        border: 1px solid transparent;
+        color: #cbd5e1;
+        text-align: left;
+        justify-content: flex-start;
+        padding: 0.5rem 0.75rem;
+        border-radius: 9px;
+        font-weight: 500;
+        font-size: 0.88rem;
+        transition: all 0.18s ease;
+    }
+    section[data-testid="stSidebar"] button[kind="secondary"]:hover {
+        background-color: rgba(16, 185, 129, 0.1);
+        border-color: rgba(16, 185, 129, 0.25);
+        color: #ffffff;
+    }
+    section[data-testid="stSidebar"] button[kind="primary"] {
+        background: linear-gradient(90deg, rgba(16, 185, 129, 0.22), rgba(6, 182, 212, 0.18));
+        border: 1px solid rgba(16, 185, 129, 0.55);
+        color: #6ee7b7;
+        text-align: left;
+        justify-content: flex-start;
+        padding: 0.5rem 0.75rem;
+        border-radius: 9px;
+        font-weight: 600;
+        font-size: 0.88rem;
+        box-shadow: 0 2px 10px rgba(16, 185, 129, 0.12);
+    }
+
+    /* Hero Banner di Area Utama */
+    .hero-banner {
+        background: linear-gradient(135deg, #0f172a 0%, #111c33 55%, #0b292e 100%);
+        border: 1px solid rgba(16, 185, 129, 0.28);
+        border-left: 4px solid #10b981;
+        border-radius: 14px;
+        padding: 1.45rem 1.8rem;
+        margin-bottom: 1.5rem;
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.28);
     }
     .hero-badge {
         display: inline-block;
-        background: rgba(56, 189, 248, 0.15);
-        color: #38bdf8;
-        border: 1px solid rgba(56, 189, 248, 0.35);
-        font-size: 0.78rem;
+        background: rgba(16, 185, 129, 0.15);
+        color: #34d399;
+        border: 1px solid rgba(16, 185, 129, 0.35);
+        font-size: 0.74rem;
         font-weight: 600;
-        padding: 0.2rem 0.65rem;
+        padding: 0.2rem 0.7rem;
         border-radius: 999px;
-        margin-bottom: 0.5rem;
-        letter-spacing: 0.03em;
+        margin-bottom: 0.55rem;
+        letter-spacing: 0.05em;
     }
     .hero-title {
-        font-size: 1.75rem;
+        font-size: 1.7rem;
         font-weight: 700;
         margin: 0 0 0.35rem 0;
-        color: #ffffff;
+        color: #f8fafc;
     }
     .hero-subtitle {
-        font-size: 0.95rem;
-        color: #cbd5e1;
+        font-size: 0.94rem;
+        color: #94a3b8;
         margin: 0;
+        line-height: 1.5;
     }
+
+    /* Kartu Informasi & Metrik */
     .info-card {
-        background-color: rgba(30, 41, 59, 0.45);
-        border: 1px solid rgba(148, 163, 184, 0.2);
+        background: rgba(15, 23, 42, 0.75);
+        border: 1px solid rgba(148, 163, 184, 0.18);
         border-radius: 12px;
-        padding: 1rem 1.2rem;
-        margin-bottom: 0.8rem;
+        padding: 1.1rem 1.25rem;
+        margin-bottom: 0.9rem;
+        line-height: 1.65;
     }
     div[data-testid="stMetric"] {
-        background-color: rgba(30, 41, 59, 0.45);
-        border: 1px solid rgba(148, 163, 184, 0.2);
-        border-radius: 10px;
-        padding: 0.75rem 1rem;
+        background: rgba(15, 23, 42, 0.8);
+        border: 1px solid rgba(16, 185, 129, 0.2);
+        border-radius: 12px;
+        padding: 0.85rem 1.1rem;
+    }
+    div[data-testid="stMetricLabel"] {
+        color: #94a3b8 !important;
+        font-size: 0.82rem !important;
+    }
+    div[data-testid="stMetricValue"] {
+        color: #f8fafc !important;
+        font-size: 1.35rem !important;
+    }
+
+    /* Tombol Aksi Utama */
+    .stButton > button[kind="primary"] {
+        background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+        color: #ffffff;
+        border: none;
+        border-radius: 9px;
+        font-weight: 600;
+        padding: 0.55rem 1.2rem;
+        transition: all 0.2s ease;
+    }
+    .stButton > button[kind="primary"]:hover {
+        background: linear-gradient(135deg, #34d399 0%, #10b981 100%);
+        box-shadow: 0 4px 14px rgba(16, 185, 129, 0.35);
+    }
+
+    /* Tab Styling */
+    .stTabs [data-baseweb="tab-list"] {
+        gap: 6px;
+        background-color: rgba(15, 23, 42, 0.6);
+        padding: 0.35rem;
+        border-radius: 11px;
+        border: 1px solid rgba(148, 163, 184, 0.15);
+    }
+    .stTabs [data-baseweb="tab"] {
+        border-radius: 8px;
+        padding: 0.45rem 0.9rem;
+        color: #94a3b8;
+        font-weight: 500;
+    }
+    .stTabs [aria-selected="true"] {
+        background-color: rgba(16, 185, 129, 0.18) !important;
+        color: #6ee7b7 !important;
+        font-weight: 600 !important;
     }
     </style>
     """,
@@ -355,7 +489,6 @@ def inspect_instagram_public(username: str) -> Dict[str, Any]:
       "risk_flags": [],
   }
 
-  # Cek pola username mencurigakan
   if re.search(r"[._]{3,}", clean_u):
     result["risk_flags"].append(
         "Username memakai banyak titik/garis bawah berulang (pola umum akun"
@@ -442,11 +575,9 @@ def inspect_instagram_public(username: str) -> Dict[str, Any]:
 
 
 def extract_usernames_from_ig_export(raw_bytes: bytes) -> Set[str]:
-  """Mengekstrak daftar username dari file ekspor JSON atau HTML resmi Instagram."""
   usernames: Set[str] = set()
   text = raw_bytes.decode("utf-8", errors="ignore")
 
-  # Coba parse sebagai JSON terlebih dahulu
   try:
     data = json.loads(text)
 
@@ -468,7 +599,6 @@ def extract_usernames_from_ig_export(raw_bytes: bytes) -> Set[str]:
   except Exception:
     pass
 
-  # Fallback jika formatnya HTML ekspor Instagram
   if not usernames:
     matches = re.findall(
         r'href="https?://(?:www\.)?instagram\.com/([a-zA-Z0-9._]+)/?"', text
@@ -871,72 +1001,80 @@ def generate_case_pdf(
 
 
 # ==========================================
-# ANTARMUKA UTAMA APLIKASI
+# NAVIGASI SIDEBAR MODERN
 # ==========================================
-def main() -> None:
-  with st.sidebar:
-    st.markdown("## 🛡️ OSINT Shield")
-    st.caption("Pusat Verifikasi Fakta & Perlindungan Digital")
-    st.divider()
+MENU_GROUPS = {
+    "Media Sosial & Identitas": [
+        ("ig_osint", "📸  Investigasi Instagram"),
+        ("username_osint", "👤  Pelacak Username"),
+    ],
+    "Forensik Visual & QR": [
+        ("image_forensics", "🕵️  Forensik Gambar & EXIF"),
+        ("qr_decoder", "📷  Bongkar QR / QRIS"),
+    ],
+    "Keamanan Link, File & Email": [
+        ("link_checker", "🔗  Cek Link Phishing"),
+        ("apk_inspector", "📦  Cek File .APK / Malware"),
+        ("email_header", "📧  Analisis Header Email"),
+    ],
+    "Transaksi, Kebocoran & Laporan": [
+        ("bank_dork", "💳  Cek Rekening & Dorking"),
+        ("leak_checker", "🔐  Cek Kebocoran Sandi"),
+        ("pdf_report", "📄  Buat Laporan Bukti PDF"),
+    ],
+}
 
-    category = st.selectbox(
-        "Kategori Alat:",
-        [
-            "📸 Instagram & Media Sosial",
-            "🖼️ Forensik Gambar & QR",
-            "🔗 Cek Link, APK & Email",
-            "👤 Identitas, Rekening & Kebocoran",
-            "📄 Dokumentasi Bukti",
-        ],
+
+def render_sidebar_nav() -> str:
+  if "active_module" not in st.session_state:
+    st.session_state["active_module"] = "ig_osint"
+
+  with st.sidebar:
+    st.markdown(
+        """
+        <div class="sidebar-brand">
+            <div class="sidebar-brand-title">🛡️ OSINT Shield</div>
+            <div class="sidebar-brand-sub">● Sistem Aktif · 10 Modul Siap</div>
+        </div>
+        """,
+        unsafe_allow_html=True,
     )
 
-    if category == "📸 Instagram & Media Sosial":
-      module_choice = st.radio(
-          "Pilih Modul:",
-          [
-              "Investigasi Profil Instagram",
-              "Pelacak Username Lintas Platform",
-          ],
+    for group_name, items in MENU_GROUPS.items():
+      st.markdown(
+          f'<div class="nav-section-label">{group_name}</div>',
+          unsafe_allow_html=True,
       )
-    elif category == "🖼️ Forensik Gambar & QR":
-      module_choice = st.radio(
-          "Pilih Modul:",
-          [
-              "Forensik Gambar & Metadata",
-              "Bongkar QR Code / QRIS Palsu",
-          ],
-      )
-    elif category == "🔗 Cek Link, APK & Email":
-      module_choice = st.radio(
-          "Pilih Modul:",
-          [
-              "Cek Link Phishing & Domain",
-              "Cek File .APK / Dokumen Berbahaya",
-              "Analisis Header Email Phishing",
-          ],
-      )
-    elif category == "👤 Identitas, Rekening & Kebocoran":
-      module_choice = st.radio(
-          "Pilih Modul:",
-          [
-              "Cek Rekening, E-Wallet & Dorking",
-              "Cek Kebocoran Password & Email",
-          ],
-      )
-    else:
-      module_choice = "Buat Laporan Bukti PDF"
+      for mod_key, mod_label in items:
+        is_active = st.session_state["active_module"] == mod_key
+        if st.button(
+            mod_label,
+            key=f"nav_{mod_key}",
+            type="primary" if is_active else "secondary",
+            width="stretch",
+        ):
+          st.session_state["active_module"] = mod_key
+          st.rerun()
 
     st.divider()
     st.caption(
-        "🟢 **Status Sistem:** Aktif\n\n"
-        "Dirancang untuk membantu memverifikasi bukti digital dan melindungi"
-        " kerabat dari penipuan online."
+        "Gunakan seluruh modul secara etis untuk verifikasi fakta dan"
+        " perlindungan kerabat dari penipuan digital."
     )
+
+  return st.session_state["active_module"]
+
+
+# ==========================================
+# ANTARMUKA UTAMA APLIKASI
+# ==========================================
+def main() -> None:
+  active_mod = render_sidebar_nav()
 
   # ==========================================
   # MODUL INSTAGRAM OSINT
   # ==========================================
-  if module_choice == "Investigasi Profil Instagram":
+  if active_mod == "ig_osint":
     render_hero(
         "MODUL OSINT MEDIA SOSIAL",
         "📸 Investigasi & Verifikasi Profil Instagram",
@@ -953,7 +1091,10 @@ def main() -> None:
           "Masukkan Username atau URL Profil Instagram:",
           placeholder="Contoh: toko_sepatu_murah123 atau https://www.instagram.com/username/",
       )
-      if st.button("🔎 Analisis Profil Instagram", type="primary") and ig_input.strip():
+      if (
+          st.button("🔎 Analisis Profil Instagram", type="primary")
+          and ig_input.strip()
+      ):
         with st.spinner("Memeriksa metadata publik & indikator risiko..."):
           ig_res = inspect_instagram_public(ig_input)
 
@@ -985,7 +1126,7 @@ def main() -> None:
           if ig_res["og_image"]:
             st.markdown(
                 f"🖼️ **[Buka Tautan Foto Profil Publik]({ig_res['og_image']})** "
-                "(Simpan gambarnya lalu cek keasliannya di modul **Forensik Gambar** atau **Google Lens** untuk memastikan bukan foto curian)."
+                "(Simpan gambarnya lalu cek keasliannya di modul **Forensik Gambar** atau **Google Lens**)."
             )
 
         with col_ig2:
@@ -1012,19 +1153,21 @@ def main() -> None:
       f_col1, f_col2 = st.columns(2)
       with f_col1:
         followers_file = st.file_uploader(
-            "Unggah file Followers (JSON/HTML)", type=["json", "html"], key="ig_flw"
+            "Unggah file Followers (JSON/HTML)",
+            type=["json", "html"],
+            key="ig_flw",
         )
       with f_col2:
         following_file = st.file_uploader(
-            "Unggah file Following (JSON/HTML)", type=["json", "html"], key="ig_flg"
+            "Unggah file Following (JSON/HTML)",
+            type=["json", "html"],
+            key="ig_flg",
         )
 
       if followers_file and following_file:
         flw_set = extract_usernames_from_ig_export(followers_file.getvalue())
         flg_set = extract_usernames_from_ig_export(following_file.getvalue())
-
         not_following_back = sorted(flg_set - flw_set)
-        mutuals = sorted(flg_set & flw_set)
 
         m1, m2, m3 = st.columns(3)
         m1.metric("Total Followers", len(flw_set))
@@ -1056,7 +1199,7 @@ def main() -> None:
   # ==========================================
   # MODUL PELACAK USERNAME LINTAS PLATFORM
   # ==========================================
-  elif module_choice == "Pelacak Username Lintas Platform":
+  elif active_mod == "username_osint":
     render_hero(
         "REKON IDENTITAS PUBLIK",
         "👤 Pelacak Jejak Username Lintas Platform",
@@ -1079,9 +1222,9 @@ def main() -> None:
       )
 
   # ==========================================
-  # MODUL 1: FORENSIK GAMBAR & METADATA
+  # MODUL FORENSIK GAMBAR & METADATA
   # ==========================================
-  elif module_choice == "Forensik Gambar & Metadata":
+  elif active_mod == "image_forensics":
     render_hero(
         "MODUL FORENSIK VISUAL",
         "🕵️ Forensik Gambar & Deep Metadata",
@@ -1300,368 +1443,3 @@ def main() -> None:
       st.markdown(
           "* [Cari di Google Lens](https://lens.google.com/)\n"
           "* [Cari di Yandex Images](https://yandex.com/images/)\n"
-          "* [Cari di TinEye](https://tineye.com/)"
-      )
-
-    with t5:
-      st.subheader("Pembersih Metadata (Lindungi Privasi Keluarga)")
-      clean_bytes = strip_metadata_to_jpeg(raw_img, quality=92)
-      st.download_button(
-          "🧹 Unduh Foto Bersih Tanpa Metadata (JPEG)",
-          data=clean_bytes,
-          file_name=f"aman_{uploaded_file.name.rsplit('.', 1)[0]}.jpg",
-          mime="image/jpeg",
-      )
-      st.divider()
-      st.subheader("Ekstraksi Teks (OCR)")
-      if HAS_PYTESSERACT and pytesseract is not None:
-        try:
-          txt = pytesseract.image_to_string(oriented_img)
-          st.text_area("Teks Terbaca", value=txt.strip(), height=180)
-        except Exception as e:
-          st.warning(f"OCR tidak tersedia di server ini: {e}")
-      else:
-        st.info(
-            "OCR memerlukan pustaka `pytesseract` & engine `tesseract-ocr` di"
-            " server."
-        )
-
-  # ==========================================
-  # MODUL 2: DETEKTOR QR CODE / QRIS PALSU
-  # ==========================================
-  elif module_choice == "Bongkar QR Code / QRIS Palsu":
-    render_hero(
-        "KEAMANAN PEMBAYARAN & TAUTAN",
-        "📷 Bongkar Isi QR Code / QRIS Sebelum Dipindai",
-        "Unggah tangkapan layar QR Code untuk melihat tautan atau nama merchant asli di dalamnya tanpa memindainya langsung lewat kamera HP.",
-    )
-
-    qr_file = st.file_uploader(
-        "Unggah gambar berisi QR Code", type=["jpg", "jpeg", "png", "webp"]
-    )
-    if qr_file:
-      pil_qr = Image.open(qr_file)
-      c1, c2 = st.columns([1, 1.4], gap="large")
-      with c1:
-        st.image(pil_qr, caption="Gambar QR", width="stretch")
-      with c2:
-        decoded_list = decode_qr_codes(pil_qr)
-        if decoded_list:
-          st.success(f"Ditemukan {len(decoded_list)} data QR Code:")
-          for idx, item in enumerate(decoded_list, 1):
-            st.markdown(f"**Isi QR #{idx}:**")
-            st.code(item, language="text")
-            if item.startswith(("http://", "https://")):
-              st.warning(
-                  "QR ini mengarah ke tautan web! Pastikan domainnya resmi"
-                  " sebelum dikunjungi."
-              )
-            elif "ID.CO.QRIS" in item.upper() or "000201" in item:
-              st.info(
-                  "Terdeteksi format standar **QRIS Pembayaran**. Periksa"
-                  " nama merchant yang muncul di teks mentah di atas."
-              )
-        else:
-          st.warning(
-              "Tidak ada QR Code yang terbaca. Pastikan gambar QR cukup jelas"
-              " dan tidak terpotong."
-          )
-
-  # ==========================================
-  # MODUL 3: CEK FILE .APK / DOKUMEN MENCURIGAKAN
-  # ==========================================
-  elif module_choice == "Cek File .APK / Dokumen Berbahaya":
-    render_hero(
-        "ANTI-MALWARE SNIFFING",
-        "📦 Pemeriksa File .APK & Dokumen Mencurigakan",
-        "Periksa file kiriman WhatsApp (seperti 'Undangan_Nikah.apk' atau 'Resi Paket.apk') secara aman tanpa menginstalnya di ponsel.",
-    )
-
-    susp_file = st.file_uploader(
-        "Unggah file yang dicurigai (APK, ZIP, PDF, dll.)"
-    )
-    if susp_file:
-      f_bytes = susp_file.getvalue()
-      report = inspect_suspicious_file(susp_file.name, f_bytes)
-
-      if susp_file.name.lower().endswith(".apk") or report["detected_permissions"]:
-        st.error(
-            "🚨 **PERINGATAN KERAS:** File ini adalah paket aplikasi Android"
-            " (.APK)! Undangan pernikahan, resi kurir, atau surat tilang"
-            " asli TIDAK PERNAH berbentuk file `.apk`."
-        )
-
-      st.markdown(
-          f"""
-          <div class="info-card">
-              <b>Nama File:</b> <code>{report['file_name']}</code> ({report['size_kb']} KB)<br>
-              <b>SHA-256:</b> <code>{report['hashes']['sha256']}</code><br>
-              <b>MD5:</b> <code>{report['hashes']['md5']}</code>
-          </div>
-          """,
-          unsafe_allow_html=True,
-      )
-      st.markdown(
-          f"🔍 **[Cek Hash File Ini di VirusTotal](https://www.virustotal.com/gui/file/{report['hashes']['sha256']})**"
-      )
-
-      if report["detected_permissions"]:
-        st.divider()
-        st.subheader("⚠️ Izin Berbahaya Terdeteksi di Dalam APK:")
-        for p in report["detected_permissions"]:
-          st.error(f"**{p['permission']}** — {p['risk_description']}")
-
-      if report["embedded_urls"]:
-        st.divider()
-        st.subheader("🌐 Tautan / Server Tujuan yang Tertanam di Dalam File:")
-        st.code("\n".join(report["embedded_urls"]), language="text")
-
-      if report["archive_entries"]:
-        with st.expander("Lihat Struktur Isi Paket File"):
-          st.code("\n".join(report["archive_entries"]), language="text")
-
-  # ==========================================
-  # MODUL 4: CEK LINK PHISHING & DOMAIN
-  # ==========================================
-  elif module_choice == "Cek Link Phishing & Domain":
-    render_hero(
-        "ANTI-PHISHING & DOMAIN RECON",
-        "🔗 Pemeriksa Keamanan Link & Domain",
-        "Lacak ke mana shortlink diarahkan, periksa sertifikat SSL, dan deteksi situs tiruan tanpa harus membukanya di browser HP kerabat.",
-    )
-
-    url_input = st.text_input(
-        "Tempelkan link yang ingin diperiksa:",
-        placeholder="Contoh: https://bit.ly/xxx atau https://promo-bank.xyz",
-    )
-    if (
-        st.button("🔍 Periksa Keamanan Link", type="primary")
-        and url_input.strip()
-    ):
-      with st.spinner("Menganalisis tujuan redirect, DNS, dan sertifikat SSL..."):
-        res = inspect_url_safety(url_input)
-
-      if res["risk_flags"]:
-        st.error("⚠️ **Ditemukan Indikasi Risiko:**")
-        for flag in res["risk_flags"]:
-          st.write(f"- {flag}")
-      else:
-        st.success(
-            "✅ Struktur domain dan SSL terlihat normal (tetap waspada"
-            " terhadap halaman login/form input data)."
-        )
-
-      c1, c2 = st.columns(2, gap="large")
-      with c1:
-        st.subheader("Tujuan & Alur Redirect")
-        st.write(f"**Domain Akhir:** `{res['domain']}`")
-        st.write(f"**URL Akhir:** `{res['final_url']}`")
-        if len(res["redirect_chain"]) > 1:
-          st.write("**Rantai Pengalihan:**")
-          for idx, step_url in enumerate(res["redirect_chain"], 1):
-            st.code(f"{idx}. {step_url}", language="text")
-        if res["ip_addresses"]:
-          st.write(
-              f"**Alamat IP Server:** `{', '.join(res['ip_addresses'])}`"
-          )
-
-      with c2:
-        st.subheader("Sertifikat SSL & Catatan DNS")
-        st.json(res["ssl_info"])
-        if res["dns_records"]:
-          st.json(res["dns_records"])
-
-      st.divider()
-      encoded_u = quote_plus(res["final_url"])
-      st.markdown(
-          f"**Cek Reputasi Eksternal:** "
-          f"[VirusTotal](https://www.virustotal.com/gui/search/{encoded_u}) | "
-          f"[urlscan.io](https://urlscan.io/search/#{quote_plus(res['domain'])})"
-      )
-
-  # ==========================================
-  # MODUL 5: ANALISIS HEADER EMAIL PHISHING
-  # ==========================================
-  elif module_choice == "Analisis Header Email Phishing":
-    render_hero(
-        "ANTI-SPOOFING EMAIL",
-        "📧 Analisis Header Email (Deteksi Email Palsu)",
-        "Tempelkan 'Show Original' / 'View Message Source' dari email mencurigakan untuk mengecek keaslian pengirim (SPF, DKIM, DMARC).",
-    )
-
-    raw_hdr = st.text_area(
-        "Tempelkan Raw Email Header di sini:",
-        height=210,
-        placeholder="Received: from ...\nAuthentication-Results: ...\nFrom: ...\nReply-To: ...",
-    )
-    if (
-        st.button("🔎 Analisis Header Email", type="primary")
-        and raw_hdr.strip()
-    ):
-      h_res = analyze_email_header(raw_hdr)
-
-      if h_res["warnings"]:
-        for w in h_res["warnings"]:
-          st.error(f"🚨 {w}")
-      else:
-        st.success(
-            "✅ Tidak ditemukan ketidaksesuaian mencolok antara pengirim dan"
-            " autentikasi dasar."
-        )
-
-      m1, m2, m3 = st.columns(3)
-      m1.metric("Status SPF", h_res["spf"])
-      m2.metric("Status DKIM", h_res["dkim"])
-      m3.metric("Status DMARC", h_res["dmarc"])
-
-      st.markdown(
-          f"""
-          <div class="info-card">
-              <b>Subjek:</b> {h_res['subject']}<br>
-              <b>From:</b> <code>{h_res['from']}</code><br>
-              <b>Reply-To:</b> <code>{h_res['reply_to']}</code><br>
-              <b>Return-Path:</b> <code>{h_res['return_path']}</code>
-          </div>
-          """,
-          unsafe_allow_html=True,
-      )
-      if h_res["server_ips"]:
-        st.write(
-            f"**IP Server Pengirim Terdeteksi:** `{', '.join(h_res['server_ips'])}`"
-        )
-
-  # ==========================================
-  # MODUL 6: CEK KEBOCORAN PASSWORD & EMAIL
-  # ==========================================
-  elif module_choice == "Cek Kebocoran Password & Email":
-    render_hero(
-        "PERLINDUNGAN AKUN & KREDENSIAL",
-        "🔐 Pemeriksa Keamanan Password & Kebocoran Data",
-        "Cek apakah kata sandi kerabat pernah bocor dalam insiden peretasan global menggunakan metode k-Anonymity yang aman.",
-    )
-
-    pw_input = st.text_input(
-        "Masukkan password yang ingin dicek keamanannya:",
-        type="password",
-    )
-    if st.button("🛡️ Cek Kebocoran Password", type="primary") and pw_input:
-      try:
-        leak_count = check_password_pwned(pw_input)
-        if leak_count > 0:
-          st.error(
-              f"⚠️ **BAHAYA!** Password ini ditemukan sebanyak **{leak_count:,}**"
-              " kali dalam database kebocoran data publik! Segera ganti"
-              " password ini di semua akun."
-          )
-        else:
-          st.success(
-              "✅ Password ini belum pernah ditemukan dalam database"
-              " kebocoran data publik Have I Been Pwned."
-          )
-      except Exception as exc:
-        st.warning(f"Gagal menghubungi layanan pengecekan: {exc}")
-
-    st.divider()
-    st.subheader("Cek Kebocoran Email")
-    email_check = st.text_input(
-        "Masukkan alamat email kerabat:", placeholder="nama@gmail.com"
-    ).strip()
-    if email_check:
-      st.markdown(
-          f"Klik untuk mengecek riwayat kebocoran email `{email_check}` secara"
-          " langsung:\n"
-          f"* [Cek di Have I Been Pwned](https://haveibeenpwned.com/account/{quote_plus(email_check)})\n"
-          f"* [Cek Kemunculan Publik di Google](https://www.google.com/search?q=%22{quote_plus(email_check)}%22)"
-      )
-
-  # ==========================================
-  # MODUL 8: CEK REKENING, E-WALLET & DORKING
-  # ==========================================
-  elif module_choice == "Cek Rekening, E-Wallet & Dorking":
-    render_hero(
-        "VERIFIKASI TRANSAKSI & REPUTASI",
-        "💳 Cek Reputasi Rekening, E-Wallet & Pencarian Publik",
-        "Verifikasi nomor rekening bank, e-wallet, nomor telepon, atau nama penjual sebelum kerabat melakukan transfer dana.",
-    )
-
-    target_query = st.text_input(
-        "Masukkan Nomor Rekening / No. HP / E-Wallet / Nama Toko:",
-        placeholder="Contoh: 081234567890 atau 1234567890",
-    ).strip()
-
-    if target_query:
-      q_enc = quote_plus(f'"{target_query}"')
-      scam_enc = quote_plus(
-          f'"{target_query}" (penipu OR penipuan OR scam OR hati-hati OR waspada OR blokir)'
-      )
-      socmed_enc = quote_plus(
-          f'"{target_query}" (site:instagram.com OR site:facebook.com OR site:tiktok.com OR site:x.com)'
-      )
-
-      col_a, col_b = st.columns(2, gap="large")
-      with col_a:
-        st.subheader("1. Portal Cek Rekening Indonesia")
-        st.markdown(
-            "* [Buka CekRekening.id (Komdigi RI)](https://cekrekening.id/home)\n"
-            "* [Buka Kredibel.com (Cek Reputasi Rekening & Telepon)](https://www.kredibel.com/)\n"
-            "* [Indonesia Anti-Scam Centre (IASC OJK)](https://iasc.ojk.go.id/)"
-        )
-      with col_b:
-        st.subheader("2. Pencarian Keluhan & Jejak Digital")
-        st.markdown(
-            f"* [Cek Laporan Penipuan di Google](https://www.google.com/search?q={scam_enc})\n"
-            f"* [Pencarian Eksak di Seluruh Web](https://www.google.com/search?q={q_enc})\n"
-            f"* [Jejak di Media Sosial](https://www.google.com/search?q={socmed_enc})"
-        )
-    else:
-      st.info(
-          "Masukkan nomor rekening, nomor HP, atau nama penjual di atas untuk"
-          " memunculkan tautan verifikasi."
-      )
-
-  # ==========================================
-  # MODUL 9: BUAT LAPORAN BUKTI DIGITAL (PDF)
-  # ==========================================
-  elif module_choice == "Buat Laporan Bukti PDF":
-    render_hero(
-        "DOKUMENTASI & PELAPORAN RESMI",
-        "📄 Generator Laporan Bukti Digital (PDF)",
-        "Susun temuan investigasi (hash bukti gambar, tautan phishing, nomor rekening terlapor, dan kronologi) menjadi berkas PDF siap cetak.",
-    )
-
-    with st.form("pdf_report_form"):
-      c_title = st.text_input(
-          "Judul Laporan", value="Dokumentasi Dugaan Penipuan Online"
-      )
-      c_inv = st.text_input("Nama Pelapor / Peneliti")
-      c_target = st.text_input(
-          "Identitas Terlapor (No. Rekening / No. HP / Username / Link)"
-      )
-      c_date = st.text_input(
-          "Tanggal & Waktu Kejadian",
-          value=datetime.now().strftime("%d %B %Y, %H:%M WIB"),
-      )
-      c_chron = st.text_area("Kronologi Kejadian", height=120)
-      c_evid = st.text_area(
-          "Rincian Bukti Digital (Tempelkan Hash SHA-256, IP Server, URL Akhir, dll.)",
-          height=140,
-      )
-      submitted = st.form_submit_button(
-          "📥 Buat & Siapkan File PDF", type="primary"
-      )
-
-    if submitted:
-      pdf_bytes = generate_case_pdf(
-          c_title, c_inv, c_target, c_date, c_chron, c_evid
-      )
-      st.success("Berkas laporan PDF berhasil dibuat!")
-      st.download_button(
-          "⬇️ Unduh Laporan Bukti (.PDF)",
-          data=pdf_bytes,
-          file_name="Laporan_Bukti_OSINT.pdf",
-          mime="application/pdf",
-      )
-
-
-if __name__ == "__main__":
-  main()
