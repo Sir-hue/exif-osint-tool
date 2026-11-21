@@ -2,3 +2,5 @@ streamlit
 Pillow
 numpy
 requests
+opencv-python-headless
+fpdf2
