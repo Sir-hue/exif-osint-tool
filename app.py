@@ -1,6 +1,6 @@
 import csv
 import hashlib
-import html as html_lib
+import html as  
 import io
 import json
 import math
@@ -1088,8 +1088,8 @@ def main() -> None:
 
     with ig_tab1:
       ig_input = st.text_input(
-          "Masukkan Username atau URL Profil Instagram:",
-          placeholder="Contoh: toko_sepatu_murah123 atau https://www.instagram.com/username/",
+          "Masukkan KONTOL atau URL Profil Instagram:",
+          placeholder="Contoh: KONTOL GEDI",
       )
       if (
           st.button("🔎 Analisis Profil Instagram", type="primary")
@@ -1115,7 +1115,7 @@ def main() -> None:
           st.markdown(
               f"""
               <div class="info-card">
-                  <b>Username:</b> <code>@{uname}</code><br>
+                  <b>Username:</b> <code>@kontolgedi</code><br>
                   <b>Status Akses:</b> {ig_res['status']}<br>
                   <b>Judul Profil:</b> {ig_res['title'] or '-'}<br>
                   <b>Deskripsi / Bio Publik:</b> {ig_res['description'] or 'Tidak tersedia (tertutup login wall)'}
@@ -1207,7 +1207,7 @@ def main() -> None:
     )
 
     uname_input = st.text_input(
-        "Masukkan Username (tanpa @):", placeholder="Contoh: budi_santoso99"
+        "Masukkan KONTOL (tanpa @):", placeholder="Contoh: budi_santoso99"
     )
     if st.button("🔎 Lacak Username", type="primary") and uname_input.strip():
       with st.spinner("Mengecek profil publik..."):
@@ -1684,7 +1684,7 @@ def main() -> None:
     )
 
     pw_input = st.text_input(
-        "Masukkan password yang ingin dicek keamanannya:",
+        "Masukkan KONTOL yang ingin dicek keamanannya:",
         type="password",
     )
     if st.button("🛡️ Cek Kebocoran Password", type="primary") and pw_input:
@@ -1707,7 +1707,7 @@ def main() -> None:
     st.divider()
     st.subheader("Cek Kebocoran Email")
     email_check = st.text_input(
-        "Masukkan alamat email kerabat:", placeholder="nama@gmail.com"
+        "Masukkan KONTOL email kerabat:", placeholder="nama@gmail.com"
     ).strip()
     if email_check:
       st.markdown(
@@ -1728,7 +1728,7 @@ def main() -> None:
     )
 
     target_query = st.text_input(
-        "Masukkan Nomor Rekening / No. HP / E-Wallet / Nama Toko:",
+        "Masukkan Nomor KONTOL / No. HP / E-Wallet / Nama Toko:",
         placeholder="Contoh: 081234567890 atau 1234567890",
     ).strip()
 
@@ -1758,7 +1758,7 @@ def main() -> None:
         )
     else:
       st.info(
-          "Masukkan nomor rekening, nomor HP, atau nama penjual di atas untuk"
+          "Masukkan nomor KONTOL, nomor HP, atau nama penjual di atas untuk"
           " memunculkan tautan verifikasi."
       )
 
