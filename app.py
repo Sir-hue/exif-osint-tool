@@ -1443,3 +1443,368 @@ def main() -> None:
       st.markdown(
           "* [Cari di Google Lens](https://lens.google.com/)\n"
           "* [Cari di Yandex Images](https://yandex.com/images/)\n"
+          "* [Cari di TinEye](https://tineye.com/)"
+      )
+
+    with t5:
+      st.subheader("Pembersih Metadata (Lindungi Privasi Keluarga)")
+      clean_bytes = strip_metadata_to_jpeg(raw_img, quality=92)
+      st.download_button(
+          "🧹 Unduh Foto Bersih Tanpa Metadata (JPEG)",
+          data=clean_bytes,
+          file_name=f"aman_{uploaded_file.name.rsplit('.', 1)[0]}.jpg",
+          mime="image/jpeg",
+      )
+      st.divider()
+      st.subheader("Ekstraksi Teks (OCR)")
+      if HAS_PYTESSERACT and pytesseract is not None:
+        try:
+          txt = pytesseract.image_to_string(oriented_img)
+          st.text_area("Teks Terbaca", value=txt.strip(), height=180)
+        except Exception as e:
+          st.warning(f"OCR tidak tersedia di server ini: {e}")
+      else:
+        st.info(
+            "OCR memerlukan pustaka `pytesseract` & engine `tesseract-ocr` di"
+            " server."
+        )
+
+  # ==========================================
+  # MODUL DETEKTOR QR CODE / QRIS PALSU
+  # ==========================================
+  elif active_mod == "qr_decoder":
+    render_hero(
+        "KEAMANAN PEMBAYARAN & TAUTAN",
+        "📷 Bongkar Isi QR Code / QRIS Sebelum Dipindai",
+        "Unggah tangkapan layar QR Code untuk melihat tautan atau nama merchant asli di dalamnya tanpa memindainya langsung lewat kamera HP.",
+    )
+
+    qr_file = st.file_uploader(
+        "Unggah gambar berisi QR Code", type=["jpg", "jpeg", "png", "webp"]
+    )
+    if qr_file:
+      pil_qr = Image.open(qr_file)
+      c1, c2 = st.columns([1, 1.4], gap="large")
+      with c1:
+        st.image(pil_qr, caption="Gambar QR", width="stretch")
+      with c2:
+        decoded_list = decode_qr_codes(pil_qr)
+        if decoded_list:
+          st.success(f"Ditemukan {len(decoded_list)} data QR Code:")
+          for idx, item in enumerate(decoded_list, 1):
+            st.markdown(f"**Isi QR #{idx}:**")
+            st.code(item, language="text")
+            if item.startswith(("http://", "https://")):
+              st.warning(
+                  "QR ini mengarah ke tautan web! Pastikan domainnya resmi"
+                  " sebelum dikunjungi."
+              )
+            elif "ID.CO.QRIS" in item.upper() or "000201" in item:
+              st.info(
+                  "Terdeteksi format standar **QRIS Pembayaran**. Periksa"
+                  " nama merchant yang muncul di teks mentah di atas."
+              )
+        else:
+          st.warning(
+              "Tidak ada QR Code yang terbaca. Pastikan gambar QR cukup jelas"
+              " dan tidak terpotong."
+          )
+
+  # ==========================================
+  # MODUL CEK FILE .APK / DOKUMEN MENCURIGAKAN
+  # ==========================================
+  elif active_mod == "apk_inspector":
+    render_hero(
+        "ANTI-MALWARE SNIFFING",
+        "📦 Pemeriksa File .APK & Dokumen Mencurigakan",
+        "Periksa file kiriman WhatsApp (seperti 'Undangan_Nikah.apk' atau 'Resi Paket.apk') secara aman tanpa menginstalnya di ponsel.",
+    )
+
+    susp_file = st.file_uploader(
+        "Unggah file yang dicurigai (APK, ZIP, PDF, dll.)"
+    )
+    if susp_file:
+      f_bytes = susp_file.getvalue()
+      report = inspect_suspicious_file(susp_file.name, f_bytes)
+
+      if susp_file.name.lower().endswith(".apk") or report["detected_permissions"]:
+        st.error(
+            "🚨 **PERINGATAN KERAS:** File ini adalah paket aplikasi Android"
+            " (.APK)! Undangan pernikahan, resi kurir, atau surat tilang"
+            " asli TIDAK PERNAH berbentuk file `.apk`."
+        )
+
+      st.markdown(
+          f"""
+          <div class="info-card">
+              <b>Nama File:</b> <code>{report['file_name']}</code> ({report['size_kb']} KB)<br>
+              <b>SHA-256:</b> <code>{report['hashes']['sha256']}</code><br>
+              <b>MD5:</b> <code>{report['hashes']['md5']}</code>
+          </div>
+          """,
+          unsafe_allow_html=True,
+      )
+      st.markdown(
+          f"🔍 **[Cek Hash File Ini di VirusTotal](https://www.virustotal.com/gui/file/{report['hashes']['sha256']})**"
+      )
+
+      if report["detected_permissions"]:
+        st.divider()
+        st.subheader("⚠️ Izin Berbahaya Terdeteksi di Dalam APK:")
+        for p in report["detected_permissions"]:
+          st.error(f"**{p['permission']}** — {p['risk_description']}")
+
+      if report["embedded_urls"]:
+        st.divider()
+        st.subheader("🌐 Tautan / Server Tujuan yang Tertanam di Dalam File:")
+        st.code("\n".join(report["embedded_urls"]), language="text")
+
+      if report["archive_entries"]:
+        with st.expander("Lihat Struktur Isi Paket File"):
+          st.code("\n".join(report["archive_entries"]), language="text")
+
+  # ==========================================
+  # MODUL CEK LINK PHISHING & DOMAIN
+  # ==========================================
+  elif active_mod == "link_checker":
+    render_hero(
+        "ANTI-PHISHING & DOMAIN RECON",
+        "🔗 Pemeriksa Keamanan Link & Domain",
+        "Lacak ke mana shortlink diarahkan, periksa sertifikat SSL, dan deteksi situs tiruan tanpa harus membukanya di browser HP kerabat.",
+    )
+
+    url_input = st.text_input(
+        "Tempelkan link yang ingin diperiksa:",
+        placeholder="Contoh: https://bit.ly/xxx atau https://promo-bank.xyz",
+    )
+    if (
+        st.button("🔍 Periksa Keamanan Link", type="primary")
+        and url_input.strip()
+    ):
+      with st.spinner("Menganalisis tujuan redirect, DNS, dan sertifikat SSL..."):
+        res = inspect_url_safety(url_input)
+
+      if res["risk_flags"]:
+        st.error("⚠️ **Ditemukan Indikasi Risiko:**")
+        for flag in res["risk_flags"]:
+          st.write(f"- {flag}")
+      else:
+        st.success(
+            "✅ Struktur domain dan SSL terlihat normal (tetap waspada"
+            " terhadap halaman login/form input data)."
+        )
+
+      c1, c2 = st.columns(2, gap="large")
+      with c1:
+        st.subheader("Tujuan & Alur Redirect")
+        st.write(f"**Domain Akhir:** `{res['domain']}`")
+        st.write(f"**URL Akhir:** `{res['final_url']}`")
+        if len(res["redirect_chain"]) > 1:
+          st.write("**Rantai Pengalihan:**")
+          for idx, step_url in enumerate(res["redirect_chain"], 1):
+            st.code(f"{idx}. {step_url}", language="text")
+        if res["ip_addresses"]:
+          st.write(
+              f"**Alamat IP Server:** `{', '.join(res['ip_addresses'])}`"
+          )
+
+      with c2:
+        st.subheader("Sertifikat SSL & Catatan DNS")
+        st.json(res["ssl_info"])
+        if res["dns_records"]:
+          st.json(res["dns_records"])
+
+      st.divider()
+      encoded_u = quote_plus(res["final_url"])
+      st.markdown(
+          f"**Cek Reputasi Eksternal:** "
+          f"[VirusTotal](https://www.virustotal.com/gui/search/{encoded_u}) | "
+          f"[urlscan.io](https://urlscan.io/search/#{quote_plus(res['domain'])})"
+      )
+
+  # ==========================================
+  # MODUL ANALISIS HEADER EMAIL PHISHING
+  # ==========================================
+  elif active_mod == "email_header":
+    render_hero(
+        "ANTI-SPOOFING EMAIL",
+        "📧 Analisis Header Email (Deteksi Email Palsu)",
+        "Tempelkan 'Show Original' / 'View Message Source' dari email mencurigakan untuk mengecek keaslian pengirim (SPF, DKIM, DMARC).",
+    )
+
+    raw_hdr = st.text_area(
+        "Tempelkan Raw Email Header di sini:",
+        height=210,
+        placeholder="Received: from ...\nAuthentication-Results: ...\nFrom: ...\nReply-To: ...",
+    )
+    if (
+        st.button("🔎 Analisis Header Email", type="primary")
+        and raw_hdr.strip()
+    ):
+      h_res = analyze_email_header(raw_hdr)
+
+      if h_res["warnings"]:
+        for w in h_res["warnings"]:
+          st.error(f"🚨 {w}")
+      else:
+        st.success(
+            "✅ Tidak ditemukan ketidaksesuaian mencolok antara pengirim dan"
+            " autentikasi dasar."
+        )
+
+      m1, m2, m3 = st.columns(3)
+      m1.metric("Status SPF", h_res["spf"])
+      m2.metric("Status DKIM", h_res["dkim"])
+      m3.metric("Status DMARC", h_res["dmarc"])
+
+      st.markdown(
+          f"""
+          <div class="info-card">
+              <b>Subjek:</b> {h_res['subject']}<br>
+              <b>From:</b> <code>{h_res['from']}</code><br>
+              <b>Reply-To:</b> <code>{h_res['reply_to']}</code><br>
+              <b>Return-Path:</b> <code>{h_res['return_path']}</code>
+          </div>
+          """,
+          unsafe_allow_html=True,
+      )
+      if h_res["server_ips"]:
+        st.write(
+            f"**IP Server Pengirim Terdeteksi:** `{', '.join(h_res['server_ips'])}`"
+        )
+
+  # ==========================================
+  # MODUL CEK KEBOCORAN PASSWORD & EMAIL
+  # ==========================================
+  elif active_mod == "leak_checker":
+    render_hero(
+        "PERLINDUNGAN AKUN & KREDENSIAL",
+        "🔐 Pemeriksa Keamanan Password & Kebocoran Data",
+        "Cek apakah kata sandi kerabat pernah bocor dalam insiden peretasan global menggunakan metode k-Anonymity yang aman.",
+    )
+
+    pw_input = st.text_input(
+        "Masukkan password yang ingin dicek keamanannya:",
+        type="password",
+    )
+    if st.button("🛡️ Cek Kebocoran Password", type="primary") and pw_input:
+      try:
+        leak_count = check_password_pwned(pw_input)
+        if leak_count > 0:
+          st.error(
+              f"⚠️ **BAHAYA!** Password ini ditemukan sebanyak **{leak_count:,}**"
+              " kali dalam database kebocoran data publik! Segera ganti"
+              " password ini di semua akun."
+          )
+        else:
+          st.success(
+              "✅ Password ini belum pernah ditemukan dalam database"
+              " kebocoran data publik Have I Been Pwned."
+          )
+      except Exception as exc:
+        st.warning(f"Gagal menghubungi layanan pengecekan: {exc}")
+
+    st.divider()
+    st.subheader("Cek Kebocoran Email")
+    email_check = st.text_input(
+        "Masukkan alamat email kerabat:", placeholder="nama@gmail.com"
+    ).strip()
+    if email_check:
+      st.markdown(
+          f"Klik untuk mengecek riwayat kebocoran email `{email_check}` secara"
+          " langsung:\n"
+          f"* [Cek di Have I Been Pwned](https://haveibeenpwned.com/account/{quote_plus(email_check)})\n"
+          f"* [Cek Kemunculan Publik di Google](https://www.google.com/search?q=%22{quote_plus(email_check)}%22)"
+      )
+
+  # ==========================================
+  # MODUL CEK REKENING, E-WALLET & DORKING
+  # ==========================================
+  elif active_mod == "bank_dork":
+    render_hero(
+        "VERIFIKASI TRANSAKSI & REPUTASI",
+        "💳 Cek Reputasi Rekening, E-Wallet & Pencarian Publik",
+        "Verifikasi nomor rekening bank, e-wallet, nomor telepon, atau nama penjual sebelum kerabat melakukan transfer dana.",
+    )
+
+    target_query = st.text_input(
+        "Masukkan Nomor Rekening / No. HP / E-Wallet / Nama Toko:",
+        placeholder="Contoh: 081234567890 atau 1234567890",
+    ).strip()
+
+    if target_query:
+      q_enc = quote_plus(f'"{target_query}"')
+      scam_enc = quote_plus(
+          f'"{target_query}" (penipu OR penipuan OR scam OR hati-hati OR waspada OR blokir)'
+      )
+      socmed_enc = quote_plus(
+          f'"{target_query}" (site:instagram.com OR site:facebook.com OR site:tiktok.com OR site:x.com)'
+      )
+
+      col_a, col_b = st.columns(2, gap="large")
+      with col_a:
+        st.subheader("1. Portal Cek Rekening Indonesia")
+        st.markdown(
+            "* [Buka CekRekening.id (Komdigi RI)](https://cekrekening.id/home)\n"
+            "* [Buka Kredibel.com (Cek Reputasi Rekening & Telepon)](https://www.kredibel.com/)\n"
+            "* [Indonesia Anti-Scam Centre (IASC OJK)](https://iasc.ojk.go.id/)"
+        )
+      with col_b:
+        st.subheader("2. Pencarian Keluhan & Jejak Digital")
+        st.markdown(
+            f"* [Cek Laporan Penipuan di Google](https://www.google.com/search?q={scam_enc})\n"
+            f"* [Pencarian Eksak di Seluruh Web](https://www.google.com/search?q={q_enc})\n"
+            f"* [Jejak di Media Sosial](https://www.google.com/search?q={socmed_enc})"
+        )
+    else:
+      st.info(
+          "Masukkan nomor rekening, nomor HP, atau nama penjual di atas untuk"
+          " memunculkan tautan verifikasi."
+      )
+
+  # ==========================================
+  # MODUL BUAT LAPORAN BUKTI DIGITAL (PDF)
+  # ==========================================
+  elif active_mod == "pdf_report":
+    render_hero(
+        "DOKUMENTASI & PELAPORAN RESMI",
+        "📄 Generator Laporan Bukti Digital (PDF)",
+        "Susun temuan investigasi (hash bukti gambar, tautan phishing, nomor rekening terlapor, dan kronologi) menjadi berkas PDF siap cetak.",
+    )
+
+    with st.form("pdf_report_form"):
+      c_title = st.text_input(
+          "Judul Laporan", value="Dokumentasi Dugaan Penipuan Online"
+      )
+      c_inv = st.text_input("Nama Pelapor / Peneliti")
+      c_target = st.text_input(
+          "Identitas Terlapor (No. Rekening / No. HP / Username / Link)"
+      )
+      c_date = st.text_input(
+          "Tanggal & Waktu Kejadian",
+          value=datetime.now().strftime("%d %B %Y, %H:%M WIB"),
+      )
+      c_chron = st.text_area("Kronologi Kejadian", height=120)
+      c_evid = st.text_area(
+          "Rincian Bukti Digital (Tempelkan Hash SHA-256, IP Server, URL Akhir, dll.)",
+          height=140,
+      )
+      submitted = st.form_submit_button(
+          "📥 Buat & Siapkan File PDF", type="primary"
+      )
+
+    if submitted:
+      pdf_bytes = generate_case_pdf(
+          c_title, c_inv, c_target, c_date, c_chron, c_evid
+      )
+      st.success("Berkas laporan PDF berhasil dibuat!")
+      st.download_button(
+          "⬇️ Unduh Laporan Bukti (.PDF)",
+          data=pdf_bytes,
+          file_name="Laporan_Bukti_OSINT.pdf",
+          mime="application/pdf",
+      )
+
+
+if __name__ == "__main__":
+  main()
