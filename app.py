@@ -1,5 +1,6 @@
 import csv
 import hashlib
+import html as html_lib
 import io
 import json
 import math
@@ -8,7 +9,7 @@ import socket
 import ssl
 import zipfile
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Set, Tuple
 from urllib.parse import quote_plus, urlparse
 
 import cv2
@@ -326,6 +327,157 @@ def build_csv_report(rows: List[Dict[str, str]]) -> str:
   for r in rows:
     writer.writerow(r)
   return buf.getvalue()
+
+
+# ==========================================
+# FUNGSI BANTU MODUL INSTAGRAM OSINT
+# ==========================================
+def clean_instagram_username(raw_input: str) -> str:
+  val = raw_input.strip()
+  if "instagram.com/" in val:
+    parsed = urlparse(val if val.startswith("http") else "https://" + val)
+    parts = [p for p in parsed.path.split("/") if p]
+    if parts:
+      val = parts[0]
+  return val.lstrip("@").strip()
+
+
+def inspect_instagram_public(username: str) -> Dict[str, Any]:
+  clean_u = clean_instagram_username(username)
+  profile_url = f"https://www.instagram.com/{clean_u}/"
+  result: Dict[str, Any] = {
+      "username": clean_u,
+      "profile_url": profile_url,
+      "status": "Tidak Diketahui",
+      "title": "",
+      "description": "",
+      "og_image": "",
+      "risk_flags": [],
+  }
+
+  # Cek pola username mencurigakan
+  if re.search(r"[._]{3,}", clean_u):
+    result["risk_flags"].append(
+        "Username memakai banyak titik/garis bawah berulang (pola umum akun"
+        " tiruan/impersonator)."
+    )
+  if re.search(r"\d{4,}$", clean_u):
+    result["risk_flags"].append(
+        "Username diakhiri banyak angka acak (sering dipakai akun bot atau"
+        " akun sekali pakai)."
+    )
+  scam_keywords = (
+      "giveaway",
+      "official_id",
+      "promo_",
+      "lelang",
+      "tebusmurah",
+      "dana_kaget",
+      "cs_resmi",
+  )
+  if any(kw in clean_u.lower() for kw in scam_keywords):
+    result["risk_flags"].append(
+        "Username mengandung kata kunci yang sering disalahgunakan untuk modus"
+        " penipuan/giveaway palsu."
+    )
+
+  headers = {
+      "User-Agent": (
+          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+          " (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+      ),
+      "Accept-Language": "id-ID,id;q=0.9,en-US;q=0.8,en;q=0.7",
+  }
+
+  try:
+    resp = requests.get(
+        profile_url, headers=headers, timeout=8, allow_redirects=True
+    )
+    if resp.status_code == 404:
+      result["status"] = "Akun Tidak Ditemukan (404)"
+      return result
+
+    page_html = resp.text
+    og_title_m = re.search(
+        r'<meta\s+property="og:title"\s+content="([^"]*)"', page_html
+    )
+    og_desc_m = re.search(
+        r'<meta\s+property="og:description"\s+content="([^"]*)"', page_html
+    )
+    og_img_m = re.search(
+        r'<meta\s+property="og:image"\s+content="([^"]*)"', page_html
+    )
+
+    if og_title_m:
+      result["title"] = html_lib.unescape(og_title_m.group(1))
+    if og_desc_m:
+      result["description"] = html_lib.unescape(og_desc_m.group(1))
+    if og_img_m:
+      result["og_image"] = html_lib.unescape(og_img_m.group(1))
+
+    if result["title"] or result["description"]:
+      result["status"] = "Metadata Publik Terbaca"
+      desc_lower = result["description"].lower()
+      if "0 posts" in desc_lower or "0 kiriman" in desc_lower:
+        result["risk_flags"].append(
+            "Akun memiliki 0 kiriman (hati-hati jika mengaku sebagai toko"
+            " terpercaya atau akun lama)."
+        )
+      if any(
+          w in desc_lower
+          for w in ("wa.me", "whatsapp", "telegram", "t.me", "bit.ly")
+      ):
+        result["risk_flags"].append(
+            "Deskripsi mengarahkan kontak keluar Instagram (WhatsApp/Telegram/"
+            "shortlink) — selalu verifikasi nomor tujuan sebelum transaksi."
+        )
+    else:
+      result["status"] = (
+          f"Dibatasi Login Wall Instagram (HTTP {resp.status_code})"
+      )
+  except Exception as exc:
+    result["status"] = f"Gagal mengakses halaman publik ({exc})"
+
+  return result
+
+
+def extract_usernames_from_ig_export(raw_bytes: bytes) -> Set[str]:
+  """Mengekstrak daftar username dari file ekspor JSON atau HTML resmi Instagram."""
+  usernames: Set[str] = set()
+  text = raw_bytes.decode("utf-8", errors="ignore")
+
+  # Coba parse sebagai JSON terlebih dahulu
+  try:
+    data = json.loads(text)
+
+    def walk_json(node: Any) -> None:
+      if isinstance(node, dict):
+        if "string_list_data" in node and isinstance(
+            node["string_list_data"], list
+        ):
+          for entry in node["string_list_data"]:
+            if isinstance(entry, dict) and entry.get("value"):
+              usernames.add(str(entry["value"]).strip().lower())
+        for v in node.values():
+          walk_json(v)
+      elif isinstance(node, list):
+        for item in node:
+          walk_json(item)
+
+    walk_json(data)
+  except Exception:
+    pass
+
+  # Fallback jika formatnya HTML ekspor Instagram
+  if not usernames:
+    matches = re.findall(
+        r'href="https?://(?:www\.)?instagram\.com/([a-zA-Z0-9._]+)/?"', text
+    )
+    for m in matches:
+      if m.lower() not in ("explore", "accounts", "about", "legal", "privacy"):
+        usernames.add(m.lower())
+
+  return usernames
 
 
 # ==========================================
@@ -730,14 +882,23 @@ def main() -> None:
     category = st.selectbox(
         "Kategori Alat:",
         [
+            "📸 Instagram & Media Sosial",
             "🖼️ Forensik Gambar & QR",
             "🔗 Cek Link, APK & Email",
-            "👤 Identitas, Akun & Kebocoran",
+            "👤 Identitas, Rekening & Kebocoran",
             "📄 Dokumentasi Bukti",
         ],
     )
 
-    if category == "🖼️ Forensik Gambar & QR":
+    if category == "📸 Instagram & Media Sosial":
+      module_choice = st.radio(
+          "Pilih Modul:",
+          [
+              "Investigasi Profil Instagram",
+              "Pelacak Username Lintas Platform",
+          ],
+      )
+    elif category == "🖼️ Forensik Gambar & QR":
       module_choice = st.radio(
           "Pilih Modul:",
           [
@@ -754,12 +915,11 @@ def main() -> None:
               "Analisis Header Email Phishing",
           ],
       )
-    elif category == "👤 Identitas, Akun & Kebocoran":
+    elif category == "👤 Identitas, Rekening & Kebocoran":
       module_choice = st.radio(
           "Pilih Modul:",
           [
               "Cek Rekening, E-Wallet & Dorking",
-              "Pelacak Username Publik",
               "Cek Kebocoran Password & Email",
           ],
       )
@@ -774,9 +934,154 @@ def main() -> None:
     )
 
   # ==========================================
+  # MODUL INSTAGRAM OSINT
+  # ==========================================
+  if module_choice == "Investigasi Profil Instagram":
+    render_hero(
+        "MODUL OSINT MEDIA SOSIAL",
+        "📸 Investigasi & Verifikasi Profil Instagram",
+        "Periksa metadata publik profil Instagram, deteksi pola akun toko palsu/penipu, lacak riwayat username, serta audit file ekspor resmi Instagram tanpa perlu login.",
+    )
+
+    ig_tab1, ig_tab2 = st.tabs([
+        "🔍 Analisis Profil & Jejak Publik",
+        "📂 Audit File Ekspor Instagram (Non-Followers)",
+    ])
+
+    with ig_tab1:
+      ig_input = st.text_input(
+          "Masukkan Username atau URL Profil Instagram:",
+          placeholder="Contoh: toko_sepatu_murah123 atau https://www.instagram.com/username/",
+      )
+      if st.button("🔎 Analisis Profil Instagram", type="primary") and ig_input.strip():
+        with st.spinner("Memeriksa metadata publik & indikator risiko..."):
+          ig_res = inspect_instagram_public(ig_input)
+
+        uname = ig_res["username"]
+        if ig_res["risk_flags"]:
+          st.error("⚠️ **Ditemukan Indikator Kewaspadaan (Red Flags):**")
+          for fl in ig_res["risk_flags"]:
+            st.write(f"- {fl}")
+        else:
+          st.success(
+              "✅ Tidak terdeteksi pola red-flag otomatis pada format username"
+              " maupun bio publik yang terbaca."
+          )
+
+        col_ig1, col_ig2 = st.columns([1.3, 1], gap="large")
+        with col_ig1:
+          st.subheader("Ringkasan Metadata Publik")
+          st.markdown(
+              f"""
+              <div class="info-card">
+                  <b>Username:</b> <code>@{uname}</code><br>
+                  <b>Status Akses:</b> {ig_res['status']}<br>
+                  <b>Judul Profil:</b> {ig_res['title'] or '-'}<br>
+                  <b>Deskripsi / Bio Publik:</b> {ig_res['description'] or 'Tidak tersedia (tertutup login wall)'}
+              </div>
+              """,
+              unsafe_allow_html=True,
+          )
+          if ig_res["og_image"]:
+            st.markdown(
+                f"🖼️ **[Buka Tautan Foto Profil Publik]({ig_res['og_image']})** "
+                "(Simpan gambarnya lalu cek keasliannya di modul **Forensik Gambar** atau **Google Lens** untuk memastikan bukan foto curian)."
+            )
+
+        with col_ig2:
+          st.subheader("Tautan Riset & Jejak Digital")
+          u_enc = quote_plus(f'"{uname}"')
+          scam_ig_enc = quote_plus(
+              f'"{uname}" (penipu OR penipuan OR scam OR hati-hati OR waspada)'
+          )
+          cache_enc = quote_plus(f"site:instagram.com/{uname}")
+          st.markdown(
+              f"* [Buka Profil Asli di Instagram]({ig_res['profile_url']})\n"
+              f"* [Cek Laporan Penipuan Terkait @{uname}](https://www.google.com/search?q={scam_ig_enc})\n"
+              f"* [Arsip Indeks Postingan di Google](https://www.google.com/search?q={cache_enc})\n"
+              f"* [Jejak @{uname} di Platform Lain](https://www.google.com/search?q={u_enc})"
+          )
+
+    with ig_tab2:
+      st.subheader("Audit Pengikut & Mengikuti (100% Aman Tanpa Password)")
+      st.caption(
+          "Unggah file `followers_1.json` (atau `.html`) dan `following.json`"
+          " dari menu **Pusat Akun Meta > Informasi dan izin Anda > Unduh"
+          " informasi Anda** untuk melihat akun yang tidak mengikuti balik."
+      )
+      f_col1, f_col2 = st.columns(2)
+      with f_col1:
+        followers_file = st.file_uploader(
+            "Unggah file Followers (JSON/HTML)", type=["json", "html"], key="ig_flw"
+        )
+      with f_col2:
+        following_file = st.file_uploader(
+            "Unggah file Following (JSON/HTML)", type=["json", "html"], key="ig_flg"
+        )
+
+      if followers_file and following_file:
+        flw_set = extract_usernames_from_ig_export(followers_file.getvalue())
+        flg_set = extract_usernames_from_ig_export(following_file.getvalue())
+
+        not_following_back = sorted(flg_set - flw_set)
+        mutuals = sorted(flg_set & flw_set)
+
+        m1, m2, m3 = st.columns(3)
+        m1.metric("Total Followers", len(flw_set))
+        m2.metric("Total Following", len(flg_set))
+        m3.metric("Tidak Follback", len(not_following_back))
+
+        if not_following_back:
+          rows_nfb = [
+              {
+                  "Username": u,
+                  "Tautan Profil": f"https://www.instagram.com/{u}/",
+              }
+              for u in not_following_back
+          ]
+          st.dataframe(
+              rows_nfb,
+              width="stretch",
+              hide_index=True,
+              column_config={
+                  "Tautan Profil": st.column_config.LinkColumn("Tautan Profil")
+              },
+          )
+        else:
+          st.info(
+              "Semua akun yang diikuti sudah mengikuti balik (atau pastikan"
+              " file ekspor yang diunggah sudah sesuai)."
+          )
+
+  # ==========================================
+  # MODUL PELACAK USERNAME LINTAS PLATFORM
+  # ==========================================
+  elif module_choice == "Pelacak Username Lintas Platform":
+    render_hero(
+        "REKON IDENTITAS PUBLIK",
+        "👤 Pelacak Jejak Username Lintas Platform",
+        "Cek penggunaan username di berbagai platform media sosial untuk memverifikasi keaslian akun atau melacak akun tiruan.",
+    )
+
+    uname_input = st.text_input(
+        "Masukkan Username (tanpa @):", placeholder="Contoh: budi_santoso99"
+    )
+    if st.button("🔎 Lacak Username", type="primary") and uname_input.strip():
+      with st.spinner("Mengecek profil publik..."):
+        rows = check_username_public(uname_input)
+      st.dataframe(
+          rows,
+          width="stretch",
+          hide_index=True,
+          column_config={
+              "Tautan Profil": st.column_config.LinkColumn("Tautan Profil")
+          },
+      )
+
+  # ==========================================
   # MODUL 1: FORENSIK GAMBAR & METADATA
   # ==========================================
-  if module_choice == "Forensik Gambar & Metadata":
+  elif module_choice == "Forensik Gambar & Metadata":
     render_hero(
         "MODUL FORENSIK VISUAL",
         "🕵️ Forensik Gambar & Deep Metadata",
@@ -842,9 +1147,7 @@ def main() -> None:
     with t1:
       c1, c2 = st.columns([1, 1.35], gap="large")
       with c1:
-        st.image(
-            oriented_img, caption=uploaded_file.name, width="stretch"
-        )
+        st.image(oriented_img, caption=uploaded_file.name, width="stretch")
       with c2:
         st.subheader("Ringkasan & Sidik Jari File")
         m_a, m_b, m_c = st.columns(3)
@@ -1269,31 +1572,6 @@ def main() -> None:
           " langsung:\n"
           f"* [Cek di Have I Been Pwned](https://haveibeenpwned.com/account/{quote_plus(email_check)})\n"
           f"* [Cek Kemunculan Publik di Google](https://www.google.com/search?q=%22{quote_plus(email_check)}%22)"
-      )
-
-  # ==========================================
-  # MODUL 7: PELACAK USERNAME PUBLIK
-  # ==========================================
-  elif module_choice == "Pelacak Username Publik":
-    render_hero(
-        "REKON IDENTITAS PUBLIK",
-        "👤 Pelacak Jejak Username Publik",
-        "Cek penggunaan username di berbagai platform media sosial untuk memverifikasi keaslian akun atau melacak akun tiruan.",
-    )
-
-    uname_input = st.text_input(
-        "Masukkan Username (tanpa @):", placeholder="Contoh: budi_santoso99"
-    )
-    if st.button("🔎 Lacak Username", type="primary") and uname_input.strip():
-      with st.spinner("Mengecek profil publik..."):
-        rows = check_username_public(uname_input)
-      st.dataframe(
-          rows,
-          width="stretch",
-          hide_index=True,
-          column_config={
-              "Tautan Profil": st.column_config.LinkColumn("Tautan Profil")
-          },
       )
 
   # ==========================================
